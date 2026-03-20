@@ -178,20 +178,15 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
         children: [
           Icon(Icons.receipt_long, color: AppColors.primary, size: 20),
           const SizedBox(width: 10),
-          Text(
-            '${_products.length} producto${_products.length == 1 ? '' : 's'} encontrado${_products.length == 1 ? '' : 's'}',
-            style: TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            '$_selectedCount seleccionado${_selectedCount == 1 ? '' : 's'}',
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12,
+          Expanded(
+            child: Text(
+              '${_products.length} encontrado${_products.length == 1 ? '' : 's'} · $_selectedCount seleccionado${_selectedCount == 1 ? '' : 's'}',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

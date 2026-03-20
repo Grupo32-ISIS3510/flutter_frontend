@@ -195,32 +195,143 @@ class MockData {
     'rec-005': ['Banano', 'Leche'],
   };
 
-  static final recipeDetail = RecipeDetail(
-    id: 'rec-001',
-    name: 'Sopa de pollo con verduras',
-    description: 'Una sopa reconfortante ideal para usar pollo y verduras próximos a vencer.',
-    instructions: '''1. Cortar la pechuga de pollo en trozos pequeños.
+  static final Map<String, RecipeDetail> recipeDetails = {
+    'rec-001': RecipeDetail(
+      id: 'rec-001',
+      name: 'Ensalada de aguacate y tomate',
+      description: '¡Úsalos antes de que maduren demasiado!',
+      instructions: '''1. Lavar y cortar los tomates en rodajas.
+2. Pelar y cortar el aguacate en cubos.
+3. Picar finamente la cebolla morada y el cilantro.
+4. Mezclar todo en un bowl grande.
+5. Exprimir el jugo de un limón sobre la ensalada.
+6. Agregar aceite de oliva, sal y pimienta al gusto.
+7. Mezclar suavemente para no deshacer el aguacate.
+8. Servir inmediatamente, decorar con semillas de sésamo.''',
+      prepTimeMinutes: 15,
+      servings: 2,
+      category: RecipeCategory.lunch,
+      imageUrl: null,
+      ingredients: const [
+        RecipeIngredient(id: 'ing-101', ingredientName: 'aguacate', quantity: 2, unit: 'unidades'),
+        RecipeIngredient(id: 'ing-102', ingredientName: 'tomates', quantity: 3, unit: 'unidades'),
+        RecipeIngredient(id: 'ing-103', ingredientName: 'cebolla morada', quantity: 0.5, unit: 'unidad'),
+        RecipeIngredient(id: 'ing-104', ingredientName: 'cilantro', quantity: null, unit: 'al gusto'),
+        RecipeIngredient(id: 'ing-105', ingredientName: 'limón', quantity: 1, unit: 'unidad'),
+        RecipeIngredient(id: 'ing-106', ingredientName: 'aceite de oliva', quantity: 2, unit: 'cucharadas'),
+      ],
+      inventoryMatches: 2,
+      createdAt: DateTime(2026, 1, 1),
+    ),
+    'rec-002': RecipeDetail(
+      id: 'rec-002',
+      name: 'Smoothie de banano y leche',
+      description: 'Perfecto para un snack rápido y nutritivo.',
+      instructions: '''1. Pelar los bananos y cortarlos en trozos.
+2. Verter la leche en la licuadora.
+3. Agregar los trozos de banano.
+4. Añadir una cucharada de miel (opcional).
+5. Agregar hielo si se desea frío.
+6. Licuar por 30-40 segundos hasta obtener una mezcla homogénea.
+7. Servir inmediatamente en un vaso alto.''',
+      prepTimeMinutes: 5,
+      servings: 2,
+      category: RecipeCategory.breakfast,
+      imageUrl: null,
+      ingredients: const [
+        RecipeIngredient(id: 'ing-201', ingredientName: 'banano', quantity: 2, unit: 'unidades'),
+        RecipeIngredient(id: 'ing-202', ingredientName: 'leche', quantity: 400, unit: 'ml'),
+        RecipeIngredient(id: 'ing-203', ingredientName: 'miel', quantity: 1, unit: 'cucharada'),
+        RecipeIngredient(id: 'ing-204', ingredientName: 'hielo', quantity: null, unit: 'al gusto'),
+      ],
+      inventoryMatches: 2,
+      createdAt: DateTime(2026, 1, 5),
+    ),
+    'rec-003': RecipeDetail(
+      id: 'rec-003',
+      name: 'Arroz con vegetales salteados',
+      description: 'Completa tu menú diario con esta receta fácil.',
+      instructions: '''1. Cocinar el arroz según las instrucciones del paquete.
+2. Mientras tanto, lavar y picar los vegetales en trozos pequeños.
+3. Calentar aceite en un wok o sartén grande a fuego alto.
+4. Saltear la zanahoria y el brócoli por 3 minutos.
+5. Agregar los tomates y cocinar 2 minutos más.
+6. Añadir salsa de soya y revolver.
+7. Incorporar el arroz cocido y mezclar bien.
+8. Cocinar 2-3 minutos más revolviendo constantemente.
+9. Servir caliente con semillas de sésamo.''',
+      prepTimeMinutes: 25,
+      servings: 4,
+      category: RecipeCategory.dinner,
+      imageUrl: null,
+      ingredients: const [
+        RecipeIngredient(id: 'ing-301', ingredientName: 'arroz', quantity: 2, unit: 'tazas'),
+        RecipeIngredient(id: 'ing-302', ingredientName: 'tomates', quantity: 2, unit: 'unidades'),
+        RecipeIngredient(id: 'ing-303', ingredientName: 'zanahoria', quantity: 2, unit: 'unidades'),
+        RecipeIngredient(id: 'ing-304', ingredientName: 'brócoli', quantity: 1, unit: 'taza'),
+        RecipeIngredient(id: 'ing-305', ingredientName: 'salsa de soya', quantity: 3, unit: 'cucharadas'),
+        RecipeIngredient(id: 'ing-306', ingredientName: 'aceite', quantity: 2, unit: 'cucharadas'),
+      ],
+      inventoryMatches: 3,
+      createdAt: DateTime(2026, 1, 10),
+    ),
+    'rec-004': RecipeDetail(
+      id: 'rec-004',
+      name: 'Sopa de pollo con verduras',
+      description: 'Una sopa reconfortante ideal para usar pollo y verduras próximos a vencer.',
+      instructions: '''1. Cortar la pechuga de pollo en trozos pequeños.
 2. En una olla grande, calentar aceite a fuego medio.
 3. Sofreír el pollo hasta que esté dorado (5-7 minutos).
 4. Agregar los tomates picados y cocinar por 3 minutos.
-5. Añadir 1 litro de agua o caldo y llevar a ebullición.
-6. Reducir el fuego y cocinar a fuego lento por 25 minutos.
-7. Sazonar con sal, pimienta y cilantro al gusto.
-8. Servir caliente con arroz o pan.''',
-    prepTimeMinutes: 45,
-    servings: 4,
-    category: RecipeCategory.lunch,
-    imageUrl: null,
-    ingredients: const [
-      RecipeIngredient(id: 'ing-001', ingredientName: 'pollo', quantity: 500, unit: 'g'),
-      RecipeIngredient(id: 'ing-002', ingredientName: 'tomates', quantity: 3, unit: 'unidades'),
-      RecipeIngredient(id: 'ing-003', ingredientName: 'cebolla', quantity: 1, unit: 'unidad'),
-      RecipeIngredient(id: 'ing-004', ingredientName: 'zanahoria', quantity: 2, unit: 'unidades'),
-      RecipeIngredient(id: 'ing-005', ingredientName: 'sal', quantity: null, unit: 'al gusto'),
-    ],
-    inventoryMatches: 3,
-    createdAt: DateTime(2026, 1, 1),
-  );
+5. Añadir la zanahoria cortada en rodajas y la cebolla.
+6. Verter 1 litro de agua o caldo y llevar a ebullición.
+7. Reducir el fuego y cocinar a fuego lento por 25 minutos.
+8. Sazonar con sal, pimienta y cilantro al gusto.
+9. Servir caliente con arroz o pan.''',
+      prepTimeMinutes: 45,
+      servings: 4,
+      category: RecipeCategory.lunch,
+      imageUrl: null,
+      ingredients: const [
+        RecipeIngredient(id: 'ing-401', ingredientName: 'pollo', quantity: 500, unit: 'g'),
+        RecipeIngredient(id: 'ing-402', ingredientName: 'tomates', quantity: 3, unit: 'unidades'),
+        RecipeIngredient(id: 'ing-403', ingredientName: 'cebolla', quantity: 1, unit: 'unidad'),
+        RecipeIngredient(id: 'ing-404', ingredientName: 'zanahoria', quantity: 2, unit: 'unidades'),
+        RecipeIngredient(id: 'ing-405', ingredientName: 'sal', quantity: null, unit: 'al gusto'),
+      ],
+      inventoryMatches: 3,
+      createdAt: DateTime(2026, 1, 1),
+    ),
+    'rec-005': RecipeDetail(
+      id: 'rec-005',
+      name: 'Panqueques con banano',
+      description: 'Desayuno perfecto con bananos maduros.',
+      instructions: '''1. En un bowl, mezclar la harina, el azúcar y el polvo de hornear.
+2. En otro bowl, batir el huevo con la leche y la mantequilla derretida.
+3. Combinar los ingredientes secos con los líquidos hasta integrar.
+4. Pelar y cortar el banano en rodajas finas.
+5. Calentar una sartén antiadherente a fuego medio.
+6. Verter un cucharón de mezcla y colocar rodajas de banano encima.
+7. Cocinar hasta que aparezcan burbujas (2-3 minutos), voltear.
+8. Cocinar 1-2 minutos más del otro lado.
+9. Repetir con el resto de la mezcla.
+10. Servir apilados con miel y más rodajas de banano.''',
+      prepTimeMinutes: 20,
+      servings: 3,
+      category: RecipeCategory.breakfast,
+      imageUrl: null,
+      ingredients: const [
+        RecipeIngredient(id: 'ing-501', ingredientName: 'banano', quantity: 2, unit: 'unidades'),
+        RecipeIngredient(id: 'ing-502', ingredientName: 'leche', quantity: 200, unit: 'ml'),
+        RecipeIngredient(id: 'ing-503', ingredientName: 'harina', quantity: 1.5, unit: 'tazas'),
+        RecipeIngredient(id: 'ing-504', ingredientName: 'huevo', quantity: 1, unit: 'unidad'),
+        RecipeIngredient(id: 'ing-505', ingredientName: 'mantequilla', quantity: 2, unit: 'cucharadas'),
+        RecipeIngredient(id: 'ing-506', ingredientName: 'miel', quantity: null, unit: 'al gusto'),
+      ],
+      inventoryMatches: 2,
+      createdAt: DateTime(2026, 1, 15),
+    ),
+  };
 
   static const dashboard = DashboardResponse(
     savings: SavingsResponse(

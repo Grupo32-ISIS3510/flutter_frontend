@@ -1,6 +1,14 @@
 class ApiConfig {
   static const bool useMock = true;
 
+  // Controles por módulo: true = forzar mock aunque useMock sea false
+  // Cuando el backend esté listo con auth, cambiar useMock a false
+  // y poner cada módulo en false según esté implementado
+  static const bool useMockAuth = true;
+  static const bool useMockInventory = true;
+  static const bool useMockRecipes = true;
+  static const bool useMockAnalytics = true;
+
   static const String baseUrl = 'http://192.168.1.9:8000';
   static const String apiPrefix = '/api/v1';
 

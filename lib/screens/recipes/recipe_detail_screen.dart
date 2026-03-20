@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/config/app_theme.dart';
+import 'package:second_serving_frontend/config/recipe_images.dart';
 import 'package:second_serving_frontend/models/recipe.dart';
 import 'package:second_serving_frontend/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/providers/recipe_provider.dart';
@@ -125,37 +126,10 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
         ),
       ),
       flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.primary.withValues(alpha: 0.8),
-                AppColors.primaryDark,
-              ],
-            ),
-          ),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 40),
-                Text(
-                  recipe.category.emoji,
-                  style: const TextStyle(fontSize: 60),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  recipe.category.label,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
+        background: RecipeImages.buildImage(
+          recipeName: recipe.name,
+          category: recipe.category.value,
+          height: 220,
         ),
       ),
     );

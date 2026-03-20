@@ -31,18 +31,22 @@ class SecondServingApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final apiClient = ApiClient();
 
-    final AuthService authService = ApiConfig.useMock
-        ? MockAuthService()
-        : AuthServiceImpl(apiClient);
-    final InventoryService inventoryService = ApiConfig.useMock
-        ? MockInventoryService()
-        : InventoryServiceImpl(apiClient);
-    final RecipeService recipeService = ApiConfig.useMock
-        ? MockRecipeService()
-        : RecipeServiceImpl(apiClient);
-    final AnalyticsService analyticsService = ApiConfig.useMock
-        ? MockAnalyticsService()
-        : AnalyticsServiceImpl(apiClient);
+    final AuthService authService =
+        (ApiConfig.useMock || ApiConfig.useMockAuth)
+            ? MockAuthService()
+            : AuthServiceImpl(apiClient);
+    final InventoryService inventoryService =
+        (ApiConfig.useMock || ApiConfig.useMockInventory)
+            ? MockInventoryService()
+            : InventoryServiceImpl(apiClient);
+    final RecipeService recipeService =
+        (ApiConfig.useMock || ApiConfig.useMockRecipes)
+            ? MockRecipeService()
+            : RecipeServiceImpl(apiClient);
+    final AnalyticsService analyticsService =
+        (ApiConfig.useMock || ApiConfig.useMockAnalytics)
+            ? MockAnalyticsService()
+            : AnalyticsServiceImpl(apiClient);
 
     final router = createRouter();
 

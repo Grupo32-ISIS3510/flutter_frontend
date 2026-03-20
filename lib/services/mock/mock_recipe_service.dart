@@ -19,7 +19,7 @@ class MockRecipeService implements RecipeService {
   @override
   Future<RecipeDetail> getRecipeDetail(String id) async {
     await Future.delayed(const Duration(milliseconds: 400));
-    return MockData.recipeDetail;
+    return MockData.recipeDetails[id] ?? MockData.recipeDetails.values.first;
   }
 
   @override

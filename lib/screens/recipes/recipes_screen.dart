@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/config/app_theme.dart';
-import 'package:second_serving_frontend/models/enums.dart';
+import 'package:second_serving_frontend/config/recipe_images.dart';
 import 'package:second_serving_frontend/models/recipe.dart';
 import 'package:second_serving_frontend/providers/recipe_provider.dart';
 import 'package:second_serving_frontend/screens/recipes/recipe_detail_screen.dart';
@@ -188,32 +188,6 @@ class _RecipeCard extends StatelessWidget {
     required this.matchedIngredients,
   });
 
-  IconData get _categoryIcon {
-    switch (recipe.category) {
-      case RecipeCategory.breakfast:
-        return Icons.free_breakfast;
-      case RecipeCategory.lunch:
-        return Icons.restaurant;
-      case RecipeCategory.dinner:
-        return Icons.dinner_dining;
-      case RecipeCategory.snack:
-        return Icons.cookie;
-    }
-  }
-
-  Color get _categoryColor {
-    switch (recipe.category) {
-      case RecipeCategory.breakfast:
-        return const Color(0xFFFFB74D);
-      case RecipeCategory.lunch:
-        return AppColors.primary;
-      case RecipeCategory.dinner:
-        return const Color(0xFF7986CB);
-      case RecipeCategory.snack:
-        return const Color(0xFFFF8A65);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -232,17 +206,14 @@ class _RecipeCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image placeholder with time badge
-          Container(
-            height: 160,
-            decoration: BoxDecoration(
-              color: _categoryColor.withValues(alpha: 0.12),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             child: Stack(
               children: [
-                Center(
-                  child: Icon(_categoryIcon, size: 64, color: _categoryColor.withValues(alpha: 0.4)),
+                RecipeImages.buildImage(
+                  recipeName: recipe.name,
+                  category: recipe.category.value,
+                  height: 180,
                 ),
                 Positioned(
                   top: 12,
@@ -250,7 +221,7 @@ class _RecipeCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: AppColors.primary,
+                      color: AppColors.primary.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Row(
@@ -264,6 +235,32 @@ class _RecipeCard extends StatelessWidget {
                             color: Colors.white,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.restaurant_menu, size: 12, color: AppColors.primary),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${recipe.inventoryMatches} coincidencia${recipe.inventoryMatches == 1 ? '' : 's'}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
                           ),
                         ),
                       ],
