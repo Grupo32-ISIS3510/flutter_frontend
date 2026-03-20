@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "125440983064",
+    "project_id": "secondserving-app",
+    "storage_bucket": "secondserving-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:125440983064:android:32e14bb690190e10af836d",
+        "android_client_info": {
+          "package_name": "com.app.secondserving"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIO0jXecDSVUxuPSqn7lonwLBRYgdpu6A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:125440983064:android:d0c923be0b08818aaf836d",
+        "android_client_info": {
+          "package_name": "com.example.second_serving_frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIO0jXecDSVUxuPSqn7lonwLBRYgdpu6A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
