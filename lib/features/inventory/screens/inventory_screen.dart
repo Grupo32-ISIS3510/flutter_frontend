@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
 import 'package:second_serving_frontend/core/config/format_helpers.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/models/inventory_item.dart';
+import 'package:second_serving_frontend/features/inventory/screens/add_item_screen.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -55,8 +57,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       count: provider.expiringItems.length,
                     ),
                     const SizedBox(height: 8),
-                    ...provider.expiringItems
-                        .map((item) => _InventoryItemCard(item: item)),
+                    ...provider.expiringItems.map(
+                      (item) => _InventoryItemCard(item: item),
+                    ),
                     const SizedBox(height: 24),
                   ],
                   _SectionHeader(
@@ -72,24 +75,50 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         padding: EdgeInsets.all(32),
                         child: Column(
                           children: [
-                            Icon(Icons.inbox_outlined,
-                                size: 64, color: AppColors.textLight),
+                            Icon(
+                              Icons.inbox_outlined,
+                              size: 64,
+                              color: AppColors.textLight,
+                            ),
                             SizedBox(height: 16),
-                            Text('No hay productos en tu inventario',
-                                style: TextStyle(color: AppColors.textSecondary)),
+                            Text(
+                              'No hay productos en tu inventario',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
                           ],
                         ),
                       ),
                     )
                   else
-                    ...provider.items
-                        .map((item) => _InventoryItemCard(item: item)),
+                    ...provider.items.map(
+                      (item) => _InventoryItemCard(item: item),
+                    ),
                 ],
               ),
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // TODO: navegar a pantalla de agregar producto
+        onPressed: () async {
+          final inventoryProvider = context.read<InventoryProvider>();
+          final messenger = ScaffoldMessenger.of(context);
+
+          final created = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(builder: (_) => const AddItemScreen()),
+          );
+
+          if (!context.mounted || created != true) {
+            return;
+          }
+
+          await inventoryProvider.loadItems();
+          await inventoryProvider.loadExpiringItems();
+
+          if (!context.mounted) {
+            return;
+          }
+
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Alimento agregado correctamente')),
+          );
         },
         icon: const Icon(Icons.add),
         label: const Text('Agregar'),
@@ -119,9 +148,9 @@ class _SectionHeader extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(width: 8),
         Container(
@@ -133,7 +162,10 @@ class _SectionHeader extends StatelessWidget {
           child: Text(
             '$count',
             style: TextStyle(
-                color: color, fontWeight: FontWeight.bold, fontSize: 12),
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
           ),
         ),
       ],
@@ -160,7 +192,10 @@ class _InventoryItemCard extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: CircleAvatar(
           backgroundColor: _statusColor.withValues(alpha: 0.15),
-          child: Text(item.category.emoji, style: const TextStyle(fontSize: 20)),
+          child: Text(
+            item.category.emoji,
+            style: const TextStyle(fontSize: 20),
+          ),
         ),
         title: Text(
           item.name,
@@ -172,7 +207,10 @@ class _InventoryItemCard extends StatelessWidget {
             Text(FormatHelpers.quantity(item.quantity, item.unit)),
             Text(
               FormatHelpers.daysRemaining(item.daysRemaining),
-              style: TextStyle(color: _statusColor, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                color: _statusColor,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -183,7 +221,7 @@ class _InventoryItemCard extends StatelessWidget {
               )
             : null,
         onTap: () {
-          // TODO: navegar a detalle del producto
+          context.push('/context-aware', extra: item);
         },
       ),
     );

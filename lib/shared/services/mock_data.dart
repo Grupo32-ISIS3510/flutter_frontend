@@ -17,6 +17,20 @@ class MockData {
 
   static final List<InventoryItem> inventoryItems = [
     InventoryItem(
+      id: 'inv-000',
+      name: 'Aguacate',
+      category: ItemCategory.fruits,
+      quantity: 2,
+      unit: 'unidades',
+      unitPrice: 2500,
+      purchaseDate: DateTime.now().subtract(const Duration(days: 2)),
+      expiryDate: DateTime.now().add(const Duration(days: 1)),
+      status: ItemStatus.active,
+      daysRemaining: 1,
+      notes: 'Ejemplo para contexto-aware',
+      createdAt: DateTime.now().subtract(const Duration(days: 2)),
+    ),
+    InventoryItem(
       id: 'inv-001',
       name: 'Leche entera',
       category: ItemCategory.dairy,

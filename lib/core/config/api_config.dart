@@ -6,10 +6,10 @@ class ApiConfig {
   // y poner cada módulo en false según esté implementado
   static const bool useMockAuth = false;
   static const bool useMockInventory = false;
-  static const bool useMockRecipes = true;
-  static const bool useMockAnalytics = true;
+  static const bool useMockRecipes = false;
+  static const bool useMockAnalytics = false;
 
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  static const String baseUrl = 'http://192.168.20.28:8000';
   static const String apiPrefix = '/api/v1';
 
   static const Duration timeout = Duration(seconds: 30);

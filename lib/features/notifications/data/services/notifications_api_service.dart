@@ -29,7 +29,7 @@ class NotificationsApiService {
         'fcm_token': fcmToken,
         'platform': platform,
       }),
-    );
+    ).timeout(const Duration(seconds: 8));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(

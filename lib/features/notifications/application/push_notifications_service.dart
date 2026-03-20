@@ -1,11 +1,18 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:second_serving_frontend/firebase_options.dart';
 
 import '../data/services/notifications_api_service.dart';
 
 @pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {}
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+}
 
 class PushNotificationsService {
   PushNotificationsService({
@@ -14,36 +21,61 @@ class PushNotificationsService {
     FirebaseMessaging? firebaseMessaging,
   })  : _notificationsApiService = notificationsApiService,
         _accessTokenProvider = accessTokenProvider,
-        _firebaseMessaging = firebaseMessaging ?? FirebaseMessaging.instance;
+        _firebaseMessagingOverride = firebaseMessaging;
 
   final NotificationsApiService _notificationsApiService;
   final Future<String?> Function() _accessTokenProvider;
-  final FirebaseMessaging _firebaseMessaging;
+  final FirebaseMessaging? _firebaseMessagingOverride;
+
+  FirebaseMessaging get _firebaseMessaging =>
+      _firebaseMessagingOverride ?? FirebaseMessaging.instance;
 
   Future<void> initialize() async {
+    await _ensureFirebaseInitialized();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-    await _firebaseMessaging.requestPermission(
-      alert: true,
-      announcement: false,
-      badge: true,
-      carPlay: false,
-      criticalAlert: false,
-      provisional: false,
-      sound: true,
-    );
+    try {
+      await _firebaseMessaging.requestPermission(
+        alert: true,
+        announcement: false,
+        badge: true,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+        sound: true,
+      );
 
-    final String? initialToken = await _firebaseMessaging.getToken();
-    if (initialToken != null) {
-      await _registerTokenIfPossible(initialToken);
+      await syncTokenIfPossible();
+
+      _firebaseMessaging.onTokenRefresh.listen((String token) async {
+        await _registerTokenIfPossible(token);
+      });
+
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {});
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {});
+    } catch (_) {}
+  }
+
+  Future<void> syncTokenIfPossible() async {
+    try {
+      await _ensureFirebaseInitialized();
+      final String? currentToken = await _firebaseMessaging
+          .getToken()
+          .timeout(const Duration(seconds: 8));
+      if (currentToken != null) {
+        await _registerTokenIfPossible(currentToken);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _ensureFirebaseInitialized() async {
+    if (Firebase.apps.isNotEmpty) {
+      return;
     }
 
-    _firebaseMessaging.onTokenRefresh.listen((String token) async {
-      await _registerTokenIfPossible(token);
-    });
-
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {});
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {});
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   }
 
   Future<void> _registerTokenIfPossible(String token) async {

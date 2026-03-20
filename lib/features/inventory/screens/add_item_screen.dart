@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
@@ -15,17 +16,82 @@ class AddItemScreen extends StatefulWidget {
 }
 
 class _AddItemScreenState extends State<AddItemScreen> {
+  static final RegExp _allowedNameChars = RegExp(r"[a-zA-ZÀ-ÿ0-9'.,()/\-\s]");
+
+  final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _scannerService = ReceiptScannerService();
   ItemCategory _selectedCategory = ItemCategory.fruits;
   int _quantity = 2;
   String _unit = 'Piezas';
-  DateTime _expiryDate = DateTime.now().add(const Duration(days: 7));
+  DateTime _purchaseDate = DateUtils.dateOnly(DateTime.now());
+  DateTime _expiryDate = DateUtils.dateOnly(
+    DateTime.now().add(const Duration(days: 7)),
+  );
   String _location = 'Nevera';
   bool _isScanning = false;
+  bool _isSaving = false;
 
   final _units = ['Piezas', 'Kg', 'Litros', 'Gramos', 'Paquetes'];
   final _locations = ['Nevera', 'Congelador', 'Despensa'];
+
+  String _normalizeWhitespaces(String input) {
+    return input.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  String _sanitizeName(String input) {
+    final normalized = _normalizeWhitespaces(input);
+    return normalized
+        .split('')
+        .where((char) => _allowedNameChars.hasMatch(char))
+        .join();
+  }
+
+  DateTime _clampDate({
+    required DateTime value,
+    required DateTime min,
+    required DateTime max,
+  }) {
+    if (value.isBefore(min)) {
+      return min;
+    }
+    if (value.isAfter(max)) {
+      return max;
+    }
+    return value;
+  }
+
+  Future<DateTime?> _showSafeDatePicker({
+    required DateTime initialDate,
+    required DateTime firstDate,
+    required DateTime lastDate,
+  }) async {
+    Future<DateTime?> openPicker({Locale? locale}) {
+      return showDatePicker(
+        context: context,
+        initialDate: initialDate,
+        firstDate: firstDate,
+        lastDate: lastDate,
+        locale: locale,
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: Theme.of(
+                context,
+              ).colorScheme.copyWith(primary: AppColors.primary),
+            ),
+            child: child!,
+          );
+        },
+      );
+    }
+
+    try {
+      return await openPicker(locale: const Locale('es'));
+    } catch (_) {
+      return openPicker();
+    }
+  }
 
   @override
   void dispose() {
@@ -68,58 +134,135 @@ class _AddItemScreenState extends State<AddItemScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isScanning = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _expiryDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-      locale: const Locale('es'),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-                  primary: AppColors.primary,
-                ),
-          ),
-          child: child!,
-        );
-      },
+  Future<void> _pickExpiryDate() async {
+    final firstDate = DateUtils.dateOnly(
+      _purchaseDate,
+    ).add(const Duration(days: 1));
+    final lastDate = DateUtils.dateOnly(
+      DateTime.now().add(const Duration(days: 365 * 2)),
     );
-    if (picked != null) setState(() => _expiryDate = picked);
+    final initialDate = _clampDate(
+      value: DateUtils.dateOnly(_expiryDate),
+      min: firstDate,
+      max: lastDate,
+    );
+
+    final picked = await _showSafeDatePicker(
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+    if (picked != null) {
+      setState(() => _expiryDate = DateUtils.dateOnly(picked));
+    }
+  }
+
+  Future<void> _pickPurchaseDate() async {
+    final firstDate = DateUtils.dateOnly(
+      DateTime.now().subtract(const Duration(days: 365 * 3)),
+    );
+    final lastDate = DateUtils.dateOnly(DateTime.now());
+    final initialDate = _clampDate(
+      value: DateUtils.dateOnly(_purchaseDate),
+      min: firstDate,
+      max: lastDate,
+    );
+
+    final picked = await _showSafeDatePicker(
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+
+    if (picked == null) {
+      return;
+    }
+
+    final purchaseDate = DateUtils.dateOnly(picked);
+    setState(() {
+      _purchaseDate = purchaseDate;
+      if (!_expiryDate.isAfter(_purchaseDate)) {
+        _expiryDate = _purchaseDate.add(const Duration(days: 1));
+      }
+    });
   }
 
   Future<void> _save() async {
-    if (_nameController.text.trim().isEmpty) {
+    if (_isSaving) {
+      return;
+    }
+
+    if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa el nombre del alimento')),
+        const SnackBar(content: Text('Revisa los campos del formulario')),
       );
       return;
     }
 
-    final now = DateTime.now();
+    if (!_expiryDate.isAfter(_purchaseDate)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La fecha de vencimiento debe ser posterior a la de compra',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final sanitizedName = _sanitizeName(_nameController.text);
+    if (sanitizedName.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingresa un nombre válido para el alimento'),
+        ),
+      );
+      return;
+    }
+
+    if (_nameController.text != sanitizedName) {
+      _nameController.text = sanitizedName;
+      _nameController.selection = TextSelection.collapsed(
+        offset: sanitizedName.length,
+      );
+    }
+
+    setState(() => _isSaving = true);
+
     final data = {
-      'name': _nameController.text.trim(),
+      'name': sanitizedName,
       'category': _selectedCategory.value,
       'quantity': _quantity,
       'unit': _unit.toLowerCase(),
       'purchase_date':
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
+          '${_purchaseDate.year}-${_purchaseDate.month.toString().padLeft(2, '0')}-${_purchaseDate.day.toString().padLeft(2, '0')}',
       'expiry_date':
           '${_expiryDate.year}-${_expiryDate.month.toString().padLeft(2, '0')}-${_expiryDate.day.toString().padLeft(2, '0')}',
       'notes': 'Ubicación: $_location',
     };
 
     final success = await context.read<InventoryProvider>().addItem(data);
-    if (success && mounted) {
-      Navigator.of(context).pop(true);
+    if (!mounted) {
+      return;
     }
+
+    setState(() => _isSaving = false);
+
+    if (success) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+
+    final error = context.read<InventoryProvider>().error;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error ?? 'No se pudo guardar el alimento')),
+    );
   }
 
   @override
@@ -131,25 +274,30 @@ class _AddItemScreenState extends State<AddItemScreen> {
           children: [
             _buildHeader(),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                children: [
-                  const SizedBox(height: 16),
-                  _buildMethodButtons(),
-                  const SizedBox(height: 28),
-                  _buildField('Nombre', _buildNameInput()),
-                  const SizedBox(height: 20),
-                  _buildField('Categoría', _buildCategoryDropdown()),
-                  const SizedBox(height: 20),
-                  _buildQuantityAndUnits(),
-                  const SizedBox(height: 20),
-                  _buildField('Fecha vencimiento', _buildDatePicker()),
-                  const SizedBox(height: 20),
-                  _buildLocationChips(),
-                  const SizedBox(height: 32),
-                  _buildSaveButton(),
-                  const SizedBox(height: 24),
-                ],
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  children: [
+                    const SizedBox(height: 16),
+                    _buildMethodButtons(),
+                    const SizedBox(height: 28),
+                    _buildField('Nombre', _buildNameInput()),
+                    const SizedBox(height: 20),
+                    _buildField('Categoría', _buildCategoryDropdown()),
+                    const SizedBox(height: 20),
+                    _buildQuantityAndUnits(),
+                    const SizedBox(height: 20),
+                    _buildField('Fecha compra', _buildPurchaseDatePicker()),
+                    const SizedBox(height: 20),
+                    _buildField('Fecha vencimiento', _buildExpiryDatePicker()),
+                    const SizedBox(height: 20),
+                    _buildLocationChips(),
+                    const SizedBox(height: 32),
+                    _buildSaveButton(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
             ),
           ],
@@ -172,7 +320,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 color: AppColors.textLight.withValues(alpha: 0.3),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.close, size: 20, color: AppColors.textPrimary),
+              child: const Icon(
+                Icons.close,
+                size: 20,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -194,7 +346,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
       children: [
         _isScanning
             ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(16),
@@ -271,18 +426,50 @@ class _AddItemScreenState extends State<AddItemScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: TextField(
+      child: TextFormField(
         controller: _nameController,
+        keyboardType: TextInputType.text,
+        textCapitalization: TextCapitalization.words,
+        inputFormatters: [
+          LengthLimitingTextInputFormatter(60),
+          FilteringTextInputFormatter.allow(_allowedNameChars),
+        ],
+        onChanged: (value) {
+          if (value.contains('\n')) {
+            _nameController.text = value.replaceAll('\n', ' ');
+            _nameController.selection = TextSelection.collapsed(
+              offset: _nameController.text.length,
+            );
+          }
+        },
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return 'El nombre es obligatorio';
+          }
+          final sanitized = _sanitizeName(value);
+          if (sanitized.length < 2) {
+            return 'Debe tener al menos 2 caracteres';
+          }
+          if (!RegExp(r'[a-zA-ZÀ-ÿ0-9]').hasMatch(sanitized)) {
+            return 'Usa al menos una letra o número';
+          }
+          return null;
+        },
         decoration: InputDecoration(
           hintText: 'Aguacate',
-          hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.6)),
+          hintStyle: TextStyle(
+            color: AppColors.textSecondary.withValues(alpha: 0.6),
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide.none,
           ),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
       ),
     );
@@ -299,7 +486,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
         child: DropdownButton<ItemCategory>(
           value: _selectedCategory,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary),
+          icon: const Icon(
+            Icons.keyboard_arrow_down,
+            color: AppColors.textSecondary,
+          ),
           items: ItemCategory.values.map((cat) {
             return DropdownMenuItem(
               value: cat,
@@ -318,13 +508,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: _buildField('Cantidad', _buildQuantitySelector()),
-        ),
+        Expanded(child: _buildField('Cantidad', _buildQuantitySelector())),
         const SizedBox(width: 16),
-        Expanded(
-          child: _buildField('Unidades', _buildUnitDropdown()),
-        ),
+        Expanded(child: _buildField('Unidades', _buildUnitDropdown())),
       ],
     );
   }
@@ -377,7 +563,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
         child: DropdownButton<String>(
           value: _unit,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary),
+          icon: const Icon(
+            Icons.keyboard_arrow_down,
+            color: AppColors.textSecondary,
+          ),
           items: _units.map((u) {
             return DropdownMenuItem(value: u, child: Text(u));
           }).toList(),
@@ -389,10 +578,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
     );
   }
 
-  Widget _buildDatePicker() {
-    final formatted = DateFormat("d MMM yyyy", 'es').format(_expiryDate);
+  Widget _buildPurchaseDatePicker() {
+    final formatted = DateFormat("d MMM yyyy", 'es').format(_purchaseDate);
     return GestureDetector(
-      onTap: _pickDate,
+      behavior: HitTestBehavior.opaque,
+      onTap: _pickPurchaseDate,
       child: Container(
         height: 50,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -405,11 +595,51 @@ class _AddItemScreenState extends State<AddItemScreen> {
             Expanded(
               child: Text(
                 formatted,
-                style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
-            const Icon(Icons.calendar_today_outlined,
-                size: 20, color: AppColors.textSecondary),
+            const Icon(
+              Icons.calendar_today_outlined,
+              size: 20,
+              color: AppColors.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpiryDatePicker() {
+    final formatted = DateFormat("d MMM yyyy", 'es').format(_expiryDate);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _pickExpiryDate,
+      child: Container(
+        height: 50,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                formatted,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.calendar_today_outlined,
+              size: 20,
+              color: AppColors.textSecondary,
+            ),
           ],
         ),
       ),
@@ -464,7 +694,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
       width: double.infinity,
       height: 54,
       child: ElevatedButton(
-        onPressed: _save,
+        onPressed: _isSaving ? null : _save,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
@@ -474,7 +704,16 @@ class _AddItemScreenState extends State<AddItemScreen> {
           elevation: 0,
           textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
-        child: const Text('Guardar en despensa'),
+        child: _isSaving
+            ? const SizedBox(
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: Colors.white,
+                ),
+              )
+            : const Text('Guardar en despensa'),
       ),
     );
   }
@@ -504,7 +743,9 @@ class _MethodButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: filled ? AppColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: filled ? null : Border.all(color: AppColors.textLight.withValues(alpha: 0.5)),
+          border: filled
+              ? null
+              : Border.all(color: AppColors.textLight.withValues(alpha: 0.5)),
         ),
         child: Row(
           children: [
@@ -517,8 +758,11 @@ class _MethodButton extends StatelessWidget {
                     : AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon,
-                  color: filled ? Colors.white : AppColors.primary, size: 22),
+              child: Icon(
+                icon,
+                color: filled ? Colors.white : AppColors.primary,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 14),
             Column(

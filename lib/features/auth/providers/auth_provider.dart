@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:second_serving_frontend/core/network/api_client.dart';
@@ -9,6 +11,7 @@ enum AuthState { initial, loading, authenticated, unauthenticated, error }
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService;
   final ApiClient _apiClient;
+  final Future<void> Function()? _onAuthenticated;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   AuthState _state = AuthState.initial;
@@ -16,7 +19,8 @@ class AuthProvider extends ChangeNotifier {
   String? _token;
   String? _error;
 
-  AuthProvider(this._authService, this._apiClient);
+  AuthProvider(this._authService, this._apiClient, {Future<void> Function()? onAuthenticated})
+      : _onAuthenticated = onAuthenticated;
 
   AuthState get state => _state;
   User? get user => _user;
@@ -35,6 +39,7 @@ class AuthProvider extends ChangeNotifier {
         _apiClient.setToken(_token);
         _user = await _authService.getMe();
         _state = AuthState.authenticated;
+        unawaited(_notifyAuthenticated());
       } else {
         _state = AuthState.unauthenticated;
       }
@@ -61,6 +66,7 @@ class AuthProvider extends ChangeNotifier {
       _user = response.user;
       await _storage.write(key: 'auth_token', value: _token);
       _state = AuthState.authenticated;
+      unawaited(_notifyAuthenticated());
       notifyListeners();
       return true;
     } catch (e) {
@@ -92,6 +98,7 @@ class AuthProvider extends ChangeNotifier {
       _user = response.user;
       await _storage.write(key: 'auth_token', value: _token);
       _state = AuthState.authenticated;
+      unawaited(_notifyAuthenticated());
       notifyListeners();
       return true;
     } catch (e) {
@@ -116,5 +123,15 @@ class AuthProvider extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  Future<void> _notifyAuthenticated() async {
+    if (_onAuthenticated == null) {
+      return;
+    }
+
+    try {
+      await _onAuthenticated();
+    } catch (_) {}
   }
 }

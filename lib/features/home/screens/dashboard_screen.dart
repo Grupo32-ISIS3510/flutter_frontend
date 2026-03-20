@@ -19,6 +19,8 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  static const int _expiringDaysWindow = 30;
+
   ItemCategory? _selectedCategory;
 
   @override
@@ -27,7 +29,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<AnalyticsProvider>().loadDashboard();
-      context.read<InventoryProvider>().loadExpiringItems(days: 5);
+      context
+          .read<InventoryProvider>()
+          .loadExpiringItems(days: _expiringDaysWindow);
       context.read<RecipeProvider>().loadSuggestions(limit: 3);
     });
   }
@@ -50,7 +54,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final inventoryP = context.read<InventoryProvider>();
             final recipeP = context.read<RecipeProvider>();
             await analyticsP.loadDashboard();
-            await inventoryP.loadExpiringItems(days: 5);
+            await inventoryP.loadExpiringItems(days: _expiringDaysWindow);
             await recipeP.loadSuggestions(limit: 3);
           },
           child: ListView(

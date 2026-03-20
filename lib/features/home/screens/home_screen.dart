@@ -18,6 +18,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const int _homeExpiringDaysWindow = 30;
+
   int _currentIndex = 0;
 
   final _screens = const [
@@ -35,15 +37,39 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     setState(() => _currentIndex = index);
     if (index == 0) {
-      context.read<InventoryProvider>().loadExpiringItems(days: 5);
+      context
+          .read<InventoryProvider>()
+          .loadExpiringItems(days: _homeExpiringDaysWindow);
       context.read<AnalyticsProvider>().loadDashboard();
       context.read<RecipeProvider>().loadSuggestions(limit: 3);
     }
   }
 
-  void _showAddItemScreen() {
-    Navigator.of(context).push(
+  Future<void> _showAddItemScreen() async {
+    final inventoryProvider = context.read<InventoryProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const AddItemScreen()),
+    );
+
+    if (!context.mounted || created != true) {
+      return;
+    }
+
+    await inventoryProvider.loadItems();
+    await inventoryProvider.loadExpiringItems(days: _homeExpiringDaysWindow);
+
+    if (context.mounted) {
+      setState(() => _currentIndex = 0);
+    }
+
+    if (!context.mounted) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Alimento agregado correctamente')),
     );
   }
 

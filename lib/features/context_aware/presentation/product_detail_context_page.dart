@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:second_serving_frontend/features/inventory/models/inventory_item.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../application/context_aware_service.dart';
@@ -8,10 +9,13 @@ import '../data/services/weather_service.dart';
 import '../domain/storage_recommendation_engine.dart';
 
 class ProductDetailContextPage extends StatefulWidget {
-  const ProductDetailContextPage({super.key});
+  const ProductDetailContextPage({super.key, this.item});
+
+  final InventoryItem? item;
 
   @override
-  State<ProductDetailContextPage> createState() => _ProductDetailContextPageState();
+  State<ProductDetailContextPage> createState() =>
+      _ProductDetailContextPageState();
 }
 
 class _ProductDetailContextPageState extends State<ProductDetailContextPage> {
@@ -33,7 +37,8 @@ class _ProductDetailContextPageState extends State<ProductDetailContextPage> {
     _contextState = ContextAwareState(
       weather: null,
       recommendation: _recommendationEngine.buildForWeather(null),
-      statusMessage: 'Cargando clima local para personalizar recomendaciones...',
+      statusMessage:
+          'Cargando clima local para personalizar recomendaciones...',
       fromCache: false,
       usingFallback: true,
     );
@@ -41,7 +46,8 @@ class _ProductDetailContextPageState extends State<ProductDetailContextPage> {
   }
 
   Future<void> _loadContext() async {
-    final ContextAwareState state = await _contextAwareService.loadContextAwareState();
+    final ContextAwareState state = await _contextAwareService
+        .loadContextAwareState();
     if (!mounted) {
       return;
     }
@@ -54,6 +60,7 @@ class _ProductDetailContextPageState extends State<ProductDetailContextPage> {
   @override
   Widget build(BuildContext context) {
     final ContextAwareState? contextState = _contextState;
+    final InventoryItem? selectedItem = widget.item;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -65,17 +72,19 @@ class _ProductDetailContextPageState extends State<ProductDetailContextPage> {
             children: <Widget>[
               _Header(onRefreshTap: _loadContext),
               const SizedBox(height: 18),
-              const _ProductCard(),
+              _ProductCard(item: selectedItem),
               const SizedBox(height: 18),
               _AlertBanner(
-                text: contextState?.recommendation.alertText ??
+                text:
+                    contextState?.recommendation.alertText ??
                     'Vence mañana — ¡úsalo hoy!',
               ),
               const SizedBox(height: 18),
-              _FreshnessCard(contextState: contextState),
+              _FreshnessCard(contextState: contextState, item: selectedItem),
               const SizedBox(height: 22),
               _TipsSection(
-                tips: contextState?.recommendation.tips ??
+                tips:
+                    contextState?.recommendation.tips ??
                     const <String>[
                       'Si ya está maduro, guárdalo en la nevera para detener el proceso.',
                       'Para acelerar la maduración, déjalo fuera junto a plátanos.',
@@ -113,7 +122,10 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        _RoundHeaderButton(icon: Icons.arrow_back, onTap: () => Navigator.of(context).maybePop()),
+        _RoundHeaderButton(
+          icon: Icons.arrow_back,
+          onTap: () => Navigator.of(context).maybePop(),
+        ),
         const Expanded(
           child: Center(
             child: Text(
@@ -139,10 +151,16 @@ class _Header extends StatelessWidget {
 }
 
 class _ProductCard extends StatelessWidget {
-  const _ProductCard();
+  const _ProductCard({required this.item});
+
+  final InventoryItem? item;
 
   @override
   Widget build(BuildContext context) {
+    final String productName = item?.name ?? 'Producto';
+    final String productEmoji = item?.category.emoji ?? '📦';
+    final String quantityText = _buildQuantityText(item);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
@@ -173,20 +191,23 @@ class _ProductCard extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Icon(Icons.spa, size: 110, color: AppColors.primary500),
+            child: Center(
+              child: Text(productEmoji, style: const TextStyle(fontSize: 92)),
+            ),
           ),
           const SizedBox(height: 20),
-          const Text(
-            'Aguacate',
+          Text(
+            productName,
             style: TextStyle(
               fontFamily: 'Montserrat',
               fontSize: 42,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
             ),
+            textAlign: TextAlign.center,
           ),
-          const Text(
-            '2 unidades',
+          Text(
+            quantityText,
             style: TextStyle(
               fontSize: 30,
               fontWeight: FontWeight.w600,
@@ -196,6 +217,20 @@ class _ProductCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static String _buildQuantityText(InventoryItem? item) {
+    if (item == null) {
+      return 'Sin cantidad';
+    }
+
+    final String quantity = item.quantity % 1 == 0
+        ? item.quantity.toStringAsFixed(0)
+        : item.quantity.toStringAsFixed(1);
+    final String unit = (item.unit == null || item.unit!.trim().isEmpty)
+        ? 'unidades'
+        : item.unit!.trim();
+    return '$quantity $unit';
   }
 }
 
@@ -216,7 +251,11 @@ class _AlertBanner extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.warning_amber_rounded, size: 48, color: Color(0xFF905000)),
+          const Icon(
+            Icons.warning_amber_rounded,
+            size: 48,
+            color: Color(0xFF905000),
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
@@ -236,15 +275,22 @@ class _AlertBanner extends StatelessWidget {
 }
 
 class _FreshnessCard extends StatelessWidget {
-  const _FreshnessCard({required this.contextState});
+  const _FreshnessCard({required this.contextState, required this.item});
 
   final ContextAwareState? contextState;
+  final InventoryItem? item;
 
   @override
   Widget build(BuildContext context) {
-    final String date = _formatDateSpanish(DateTime.now());
+    final String date = item == null
+        ? _formatDateSpanish(DateTime.now())
+        : 'Vence el ${_formatDateSpanish(item!.expiryDate)}';
     final String weatherLabel = _buildWeatherLabel(contextState);
-    final String storageLabel = contextState?.recommendation.storageLabel ?? 'Neutro';
+    final String storageLabel =
+        contextState?.recommendation.storageLabel ?? 'Neutro';
+    final double freshnessValue = _buildFreshnessValue(item);
+    final String expiryText = _buildExpiryLabel(item?.daysRemaining);
+    final Color expiryColor = _buildExpiryColor(item?.daysRemaining);
 
     return Container(
       width: double.infinity,
@@ -277,7 +323,10 @@ class _FreshnessCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFD4E8D6),
                   borderRadius: BorderRadius.circular(28),
@@ -296,12 +345,18 @@ class _FreshnessCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Text(date, style: const TextStyle(fontSize: 22, color: AppColors.textSecondary)),
+          Text(
+            date,
+            style: const TextStyle(
+              fontSize: 22,
+              color: AppColors.textSecondary,
+            ),
+          ),
           const SizedBox(height: 14),
           ClipRRect(
             borderRadius: BorderRadius.circular(30),
             child: LinearProgressIndicator(
-              value: 0.34,
+              value: freshnessValue,
               minHeight: 18,
               backgroundColor: Colors.white,
               color: AppColors.primary200,
@@ -310,13 +365,13 @@ class _FreshnessCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: <Widget>[
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Vence en 1 día',
+                  expiryText,
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFFBD1D1D),
+                    color: expiryColor,
                   ),
                 ),
               ),
@@ -334,7 +389,10 @@ class _FreshnessCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               contextState!.statusMessage,
-              style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ],
@@ -350,6 +408,55 @@ class _FreshnessCard extends StatelessWidget {
     final String cacheLabel = state.fromCache ? ' · caché' : '';
     final int roundedTemp = state.weather!.temperatureCelsius.round();
     return '$roundedTemp°C · ${state.weather!.humidity}%$cacheLabel';
+  }
+
+  static double _buildFreshnessValue(InventoryItem? item) {
+    if (item == null) {
+      return 0.34;
+    }
+
+    if (item.daysRemaining <= 0) {
+      return 0.05;
+    }
+
+    return (item.daysRemaining / 30).clamp(0.05, 1.0);
+  }
+
+  static String _buildExpiryLabel(int? daysRemaining) {
+    if (daysRemaining == null) {
+      return 'Vence pronto';
+    }
+
+    if (daysRemaining < 0) {
+      final int days = daysRemaining.abs();
+      return days == 1 ? 'Vencido hace 1 día' : 'Vencido hace $days días';
+    }
+
+    if (daysRemaining == 0) {
+      return 'Vence hoy';
+    }
+
+    if (daysRemaining == 1) {
+      return 'Vence en 1 día';
+    }
+
+    return 'Vence en $daysRemaining días';
+  }
+
+  static Color _buildExpiryColor(int? daysRemaining) {
+    if (daysRemaining == null) {
+      return const Color(0xFFBD1D1D);
+    }
+
+    if (daysRemaining <= 0) {
+      return AppColors.error;
+    }
+
+    if (daysRemaining <= 3) {
+      return const Color(0xFFBD1D1D);
+    }
+
+    return AppColors.primary;
   }
 
   static String _formatDateSpanish(DateTime date) {
@@ -408,7 +515,11 @@ class _TipsSection extends StatelessWidget {
               children: <Widget>[
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
-                  child: Icon(Icons.circle, size: 8, color: AppColors.primary500),
+                  child: Icon(
+                    Icons.circle,
+                    size: 8,
+                    color: AppColors.primary500,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -459,7 +570,9 @@ class _PrimaryButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary500,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(38)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(38),
+          ),
           elevation: 0,
         ),
       ),
@@ -497,7 +610,9 @@ class _SecondaryButton extends StatelessWidget {
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.gray50,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(38)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(38),
+          ),
           elevation: 0,
         ),
       ),
@@ -557,7 +672,10 @@ class _BottomBarState extends State<_BottomBar> {
       ),
       items: <BottomNavigationBarItem>[
         const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
-        const BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Despensa'),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.inventory_2),
+          label: 'Despensa',
+        ),
         BottomNavigationBarItem(
           icon: Container(
             width: 58,
@@ -570,8 +688,14 @@ class _BottomBarState extends State<_BottomBar> {
           ),
           label: '',
         ),
-        const BottomNavigationBarItem(icon: Icon(Icons.restaurant), label: 'Recetas'),
-        const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.restaurant),
+          label: 'Recetas',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.person),
+          label: 'Perfil',
+        ),
       ],
     );
   }
