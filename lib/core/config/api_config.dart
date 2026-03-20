@@ -9,7 +9,10 @@ class ApiConfig {
   static const bool useMockRecipes = false;
   static const bool useMockAnalytics = false;
 
-  static const String baseUrl = 'http://192.168.20.28:8000';
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://192.168.20.28:8000',
+  );
   static const String apiPrefix = '/api/v1';
 
   static const Duration timeout = Duration(seconds: 30);

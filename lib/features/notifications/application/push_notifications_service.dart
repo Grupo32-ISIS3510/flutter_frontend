@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:second_serving_frontend/firebase_options.dart';
 
 import '../data/services/notifications_api_service.dart';
@@ -48,6 +49,9 @@ class PushNotificationsService {
       await syncTokenIfPossible();
 
       _firebaseMessaging.onTokenRefresh.listen((String token) async {
+        if (kDebugMode) {
+          debugPrint('FCM_TOKEN_REFRESH: $token');
+        }
         await _registerTokenIfPossible(token);
       });
 
@@ -63,6 +67,9 @@ class PushNotificationsService {
           .getToken()
           .timeout(const Duration(seconds: 8));
       if (currentToken != null) {
+        if (kDebugMode) {
+          debugPrint('FCM_TOKEN: $currentToken');
+        }
         await _registerTokenIfPossible(currentToken);
       }
     } catch (_) {}
