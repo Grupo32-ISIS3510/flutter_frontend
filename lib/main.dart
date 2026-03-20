@@ -1,45 +1,69 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import 'core/theme/app_theme.dart';
-import 'features/context_aware/presentation/product_detail_context_page.dart';
-import 'features/notifications/application/push_notifications_service.dart';
-import 'features/notifications/data/services/notifications_api_service.dart';
-import 'firebase_options.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:provider/provider.dart';
+import 'package:second_serving_frontend/core/config/api_config.dart';
+import 'package:second_serving_frontend/core/config/app_theme.dart';
+import 'package:second_serving_frontend/core/router/router.dart';
+import 'package:second_serving_frontend/features/analytics/providers/analytics_provider.dart';
+import 'package:second_serving_frontend/features/auth/providers/auth_provider.dart';
+import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
+import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
+import 'package:second_serving_frontend/core/network/api_client.dart';
+import 'package:second_serving_frontend/features/analytics/services/analytics_service.dart';
+import 'package:second_serving_frontend/features/auth/services/auth_service.dart';
+import 'package:second_serving_frontend/features/inventory/services/inventory_service.dart';
+import 'package:second_serving_frontend/features/recipes/services/recipe_service.dart';
+import 'package:second_serving_frontend/features/auth/services/mock_auth_service.dart';
+import 'package:second_serving_frontend/features/inventory/services/mock_inventory_service.dart';
+import 'package:second_serving_frontend/features/recipes/services/mock_recipe_service.dart';
+import 'package:second_serving_frontend/features/analytics/services/mock_analytics_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  final PushNotificationsService pushNotificationsService = PushNotificationsService(
-    notificationsApiService: NotificationsApiService(
-      baseUrl: 'http://localhost:8000',
-    ),
-    accessTokenProvider: _readAccessToken,
-  );
-  await pushNotificationsService.initialize();
-
-  runApp(const MyApp());
+  await initializeDateFormatting('es', null);
+  runApp(const SecondServingApp());
 }
 
-Future<String?> _readAccessToken() async {
-  final SharedPreferences preferences = await SharedPreferences.getInstance();
-  return preferences.getString('access_token');
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SecondServingApp extends StatelessWidget {
+  const SecondServingApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Second Serving',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      home: const ProductDetailContextPage(),
+    final apiClient = ApiClient();
+
+    final AuthService authService =
+        (ApiConfig.useMock || ApiConfig.useMockAuth)
+            ? MockAuthService()
+            : AuthServiceImpl(apiClient);
+    final InventoryService inventoryService =
+        (ApiConfig.useMock || ApiConfig.useMockInventory)
+            ? MockInventoryService()
+            : InventoryServiceImpl(apiClient);
+    final RecipeService recipeService =
+        (ApiConfig.useMock || ApiConfig.useMockRecipes)
+            ? MockRecipeService()
+            : RecipeServiceImpl(apiClient);
+    final AnalyticsService analyticsService =
+        (ApiConfig.useMock || ApiConfig.useMockAnalytics)
+            ? MockAnalyticsService()
+            : AnalyticsServiceImpl(apiClient);
+
+    final authProvider = AuthProvider(authService, apiClient);
+    final router = createRouter(authProvider);
+
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: authProvider),
+        ChangeNotifierProvider(create: (_) => InventoryProvider(inventoryService)),
+        ChangeNotifierProvider(create: (_) => RecipeProvider(recipeService)),
+        ChangeNotifierProvider(create: (_) => AnalyticsProvider(analyticsService)),
+      ],
+      child: MaterialApp.router(
+        title: 'Second Serving',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        routerConfig: router,
+      ),
     );
   }
 }
