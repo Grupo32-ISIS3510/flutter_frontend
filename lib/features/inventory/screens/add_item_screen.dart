@@ -7,6 +7,7 @@ import 'package:second_serving_frontend/shared/models/enums.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/screens/scanned_items_review_screen.dart';
 import 'package:second_serving_frontend/features/inventory/services/receipt_scanner_service.dart';
+import 'package:second_serving_frontend/features/notifications/application/local_notifications_service.dart';
 
 class AddItemScreen extends StatefulWidget {
   const AddItemScreen({super.key});
@@ -255,6 +256,20 @@ class _AddItemScreenState extends State<AddItemScreen> {
     setState(() => _isSaving = false);
 
     if (success) {
+      final DateTime today = DateUtils.dateOnly(DateTime.now());
+      final int daysRemaining = _expiryDate.difference(today).inDays;
+
+      if (daysRemaining >= 0 && daysRemaining <= 1) {
+        await LocalNotificationsService.instance.showExpiringSoonNotification(
+          itemName: sanitizedName,
+          daysRemaining: daysRemaining,
+        );
+
+        if (!mounted) {
+          return;
+        }
+      }
+
       Navigator.of(context).pop(true);
       return;
     }

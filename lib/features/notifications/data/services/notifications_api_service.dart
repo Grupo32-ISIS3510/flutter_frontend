@@ -37,4 +37,30 @@ class NotificationsApiService {
       );
     }
   }
+
+  Future<void> updatePreferences({
+    required String authToken,
+    required int daysBeforeExpiry,
+    bool pushEnabled = true,
+  }) async {
+    final Uri uri = Uri.parse('$_baseUrl/api/v1/notifications/preferences');
+
+    final http.Response response = await _client.put(
+      uri,
+      headers: <String, String>{
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $authToken',
+      },
+      body: jsonEncode(<String, dynamic>{
+        'days_before_expiry': daysBeforeExpiry,
+        'push_enabled': pushEnabled,
+      }),
+    ).timeout(const Duration(seconds: 8));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Error actualizando preferencias (${response.statusCode}): ${response.body}',
+      );
+    }
+  }
 }

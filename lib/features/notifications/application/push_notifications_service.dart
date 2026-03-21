@@ -16,6 +16,8 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 class PushNotificationsService {
+  static const int _defaultDaysBeforeExpiry = 1;
+
   PushNotificationsService({
     required NotificationsApiService notificationsApiService,
     required Future<String?> Function() accessTokenProvider,
@@ -95,6 +97,12 @@ class PushNotificationsService {
       authToken: authToken,
       fcmToken: token,
       platform: _platformValue,
+    );
+
+    await _notificationsApiService.updatePreferences(
+      authToken: authToken,
+      daysBeforeExpiry: _defaultDaysBeforeExpiry,
+      pushEnabled: true,
     );
   }
 

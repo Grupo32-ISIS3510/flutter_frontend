@@ -23,6 +23,7 @@ import 'package:second_serving_frontend/features/inventory/services/mock_invento
 import 'package:second_serving_frontend/features/recipes/services/mock_recipe_service.dart';
 import 'package:second_serving_frontend/features/analytics/services/mock_analytics_service.dart';
 import 'package:second_serving_frontend/features/notifications/application/push_notifications_service.dart';
+import 'package:second_serving_frontend/features/notifications/application/local_notifications_service.dart';
 import 'package:second_serving_frontend/features/notifications/data/services/notifications_api_service.dart';
 import 'package:second_serving_frontend/firebase_options.dart';
 
@@ -32,6 +33,7 @@ late final PushNotificationsService _pushNotificationsService;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('es', null);
+  await LocalNotificationsService.instance.initialize();
 
   _pushNotificationsService = PushNotificationsService(
     notificationsApiService: NotificationsApiService(
