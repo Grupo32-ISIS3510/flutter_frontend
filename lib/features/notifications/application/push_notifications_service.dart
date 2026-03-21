@@ -6,13 +6,13 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:second_serving_frontend/firebase_options.dart';
 
+import 'local_notifications_service.dart';
+
 import '../data/services/notifications_api_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
 class PushNotificationsService {
@@ -22,13 +22,28 @@ class PushNotificationsService {
     required NotificationsApiService notificationsApiService,
     required Future<String?> Function() accessTokenProvider,
     FirebaseMessaging? firebaseMessaging,
-  })  : _notificationsApiService = notificationsApiService,
-        _accessTokenProvider = accessTokenProvider,
-        _firebaseMessagingOverride = firebaseMessaging;
+    LocalNotificationsService? localNotificationsService,
+  }) : _notificationsApiService = notificationsApiService,
+       _accessTokenProvider = accessTokenProvider,
+       _firebaseMessagingOverride = firebaseMessaging,
+       _localNotificationsService =
+           localNotificationsService ?? LocalNotificationsService.instance;
 
   final NotificationsApiService _notificationsApiService;
   final Future<String?> Function() _accessTokenProvider;
   final FirebaseMessaging? _firebaseMessagingOverride;
+  final LocalNotificationsService _localNotificationsService;
+  final StreamController<String> _notificationTapController =
+      StreamController<String>.broadcast();
+  String? _pendingTapRoute;
+
+  Stream<String> get onNotificationTap => _notificationTapController.stream;
+
+  String? consumePendingTapRoute() {
+    final String? route = _pendingTapRoute;
+    _pendingTapRoute = null;
+    return route;
+  }
 
   FirebaseMessaging get _firebaseMessaging =>
       _firebaseMessagingOverride ?? FirebaseMessaging.instance;
@@ -57,17 +72,39 @@ class PushNotificationsService {
         await _registerTokenIfPossible(token);
       });
 
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {});
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {});
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+        final String title =
+            message.notification?.title ?? '⚠️ Alimentos próximos a vencer';
+        final String body =
+            message.notification?.body ??
+            _buildBodyFromMessageData(message.data);
+        final String route = _extractRoute(message);
+
+        await _localNotificationsService.showForegroundPushNotification(
+          title: title,
+          body: body,
+          payload: route,
+        );
+      });
+
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        _emitTapRoute(_extractRoute(message));
+      });
+
+      final RemoteMessage? initialMessage = await _firebaseMessaging
+          .getInitialMessage();
+      if (initialMessage != null) {
+        _emitTapRoute(_extractRoute(initialMessage));
+      }
     } catch (_) {}
   }
 
   Future<void> syncTokenIfPossible() async {
     try {
       await _ensureFirebaseInitialized();
-      final String? currentToken = await _firebaseMessaging
-          .getToken()
-          .timeout(const Duration(seconds: 8));
+      final String? currentToken = await _firebaseMessaging.getToken().timeout(
+        const Duration(seconds: 8),
+      );
       if (currentToken != null) {
         if (kDebugMode) {
           debugPrint('FCM_TOKEN: $currentToken');
@@ -114,5 +151,38 @@ class PushNotificationsService {
       return 'ios_flutter';
     }
     return 'android_flutter';
+  }
+
+  void _emitTapRoute(String route) {
+    if (_notificationTapController.hasListener) {
+      _notificationTapController.add(route);
+      return;
+    }
+    _pendingTapRoute = route;
+  }
+
+  String _extractRoute(RemoteMessage message) {
+    final String? route = message.data['route'] as String?;
+    if (route != null && route.isNotEmpty) {
+      return route;
+    }
+    return '/home';
+  }
+
+  String _buildBodyFromMessageData(Map<String, dynamic> data) {
+    final String? itemName = data['item_name'] as String?;
+    final String? daysRemaining = data['days_remaining']?.toString();
+
+    if (itemName != null && itemName.isNotEmpty) {
+      if (daysRemaining == null || daysRemaining.isEmpty) {
+        return '$itemName está próximo a vencer';
+      }
+      if (daysRemaining == '0') {
+        return '$itemName vence hoy';
+      }
+      return '$itemName vence en $daysRemaining día${daysRemaining == '1' ? '' : 's'}';
+    }
+
+    return 'Revisa tu inventario para evitar desperdicio';
   }
 }

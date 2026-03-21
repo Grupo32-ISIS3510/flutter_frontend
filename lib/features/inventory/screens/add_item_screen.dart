@@ -24,7 +24,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _scannerService = ReceiptScannerService();
   ItemCategory _selectedCategory = ItemCategory.fruits;
   int _quantity = 2;
-  String _unit = 'Piezas';
+  String _unit = 'Unidades';
   DateTime _purchaseDate = DateUtils.dateOnly(DateTime.now());
   DateTime _expiryDate = DateUtils.dateOnly(
     DateTime.now().add(const Duration(days: 7)),
@@ -33,7 +33,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   bool _isScanning = false;
   bool _isSaving = false;
 
-  final _units = ['Piezas', 'Kg', 'Litros', 'Gramos', 'Paquetes'];
+  final _units = ['Unidades', 'Kg', 'Litros', 'Gramos', 'Paquetes'];
   final _locations = ['Nevera', 'Congelador', 'Despensa'];
 
   String _normalizeWhitespaces(String input) {

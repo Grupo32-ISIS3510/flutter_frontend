@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -64,46 +65,95 @@ Future<void> _syncPushTokenAfterAuth() async {
   await _pushNotificationsService.syncTokenIfPossible();
 }
 
-class SecondServingApp extends StatelessWidget {
+class SecondServingApp extends StatefulWidget {
   const SecondServingApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final apiClient = ApiClient();
+  State<SecondServingApp> createState() => _SecondServingAppState();
+}
+
+class _SecondServingAppState extends State<SecondServingApp> {
+  late final ApiClient _apiClient;
+  late final AuthProvider _authProvider;
+  late final InventoryProvider _inventoryProvider;
+  late final RecipeProvider _recipeProvider;
+  late final AnalyticsProvider _analyticsProvider;
+  late final GoRouter _router;
+
+  StreamSubscription<String>? _pushTapSubscription;
+  StreamSubscription<String>? _localTapSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _apiClient = ApiClient();
 
     final AuthService authService = (ApiConfig.useMock || ApiConfig.useMockAuth)
         ? MockAuthService()
-        : AuthServiceImpl(apiClient);
+        : AuthServiceImpl(_apiClient);
     final InventoryService inventoryService =
         (ApiConfig.useMock || ApiConfig.useMockInventory)
         ? MockInventoryService()
-        : InventoryServiceImpl(apiClient);
+        : InventoryServiceImpl(_apiClient);
     final RecipeService recipeService =
         (ApiConfig.useMock || ApiConfig.useMockRecipes)
         ? MockRecipeService()
-        : RecipeServiceImpl(apiClient);
+        : RecipeServiceImpl(_apiClient);
     final AnalyticsService analyticsService =
         (ApiConfig.useMock || ApiConfig.useMockAnalytics)
         ? MockAnalyticsService()
-        : AnalyticsServiceImpl(apiClient);
+        : AnalyticsServiceImpl(_apiClient);
 
-    final authProvider = AuthProvider(
+    _authProvider = AuthProvider(
       authService,
-      apiClient,
+      _apiClient,
       onAuthenticated: _syncPushTokenAfterAuth,
     );
-    final router = createRouter(authProvider);
+    _inventoryProvider = InventoryProvider(inventoryService);
+    _recipeProvider = RecipeProvider(recipeService);
+    _analyticsProvider = AnalyticsProvider(analyticsService);
+    _router = createRouter(_authProvider);
 
+    _pushTapSubscription = _pushNotificationsService.onNotificationTap.listen(
+      _handleNotificationRoute,
+    );
+    _localTapSubscription = LocalNotificationsService.instance.onNotificationTap
+        .listen(_handleNotificationRoute);
+
+    final String? pendingRoute = _pushNotificationsService
+        .consumePendingTapRoute();
+    if (pendingRoute != null) {
+      scheduleMicrotask(() => _handleNotificationRoute(pendingRoute));
+    }
+  }
+
+  void _handleNotificationRoute(String route) {
+    if (!mounted) {
+      return;
+    }
+    _router.go(route);
+  }
+
+  @override
+  void dispose() {
+    _pushTapSubscription?.cancel();
+    _localTapSubscription?.cancel();
+    _inventoryProvider.dispose();
+    _recipeProvider.dispose();
+    _analyticsProvider.dispose();
+    _authProvider.dispose();
+    _apiClient.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider.value(value: authProvider),
-        ChangeNotifierProvider(
-          create: (_) => InventoryProvider(inventoryService),
-        ),
-        ChangeNotifierProvider(create: (_) => RecipeProvider(recipeService)),
-        ChangeNotifierProvider(
-          create: (_) => AnalyticsProvider(analyticsService),
-        ),
+        ChangeNotifierProvider.value(value: _authProvider),
+        ChangeNotifierProvider.value(value: _inventoryProvider),
+        ChangeNotifierProvider.value(value: _recipeProvider),
+        ChangeNotifierProvider.value(value: _analyticsProvider),
       ],
       child: MaterialApp.router(
         title: 'Second Serving',
@@ -115,7 +165,7 @@ class SecondServingApp extends StatelessWidget {
           GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: const [Locale('es'), Locale('en')],
-        routerConfig: router,
+        routerConfig: _router,
       ),
     );
   }
