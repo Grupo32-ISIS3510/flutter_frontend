@@ -43,6 +43,9 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<AnalyticsProvider>().loadDashboard();
       context.read<RecipeProvider>().loadSuggestions(limit: 3);
     }
+    if (index == 3) {
+      context.read<RecipeProvider>().loadSuggestions();
+    }
   }
 
   Future<void> _showAddItemScreen() async {
