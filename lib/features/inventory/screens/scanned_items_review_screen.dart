@@ -4,6 +4,7 @@ import 'package:second_serving_frontend/core/config/app_theme.dart';
 import 'package:second_serving_frontend/shared/models/enums.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/services/receipt_scanner_service.dart';
+import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
 
 class ScannedItemsReviewScreen extends StatefulWidget {
   final List<ScannedProduct> products;
@@ -67,6 +68,11 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
     }
 
     if (mounted) {
+      await inventory.loadItems();
+      await inventory.loadExpiringItems(days: 30);
+      if (mounted) {
+        context.read<RecipeProvider>().loadSuggestions();
+      }
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
