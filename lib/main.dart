@@ -98,7 +98,10 @@ class _SecondServingAppState extends State<SecondServingApp> {
     final RecipeService recipeService =
         (ApiConfig.useMock || ApiConfig.useMockRecipes)
         ? MockRecipeService()
-        : RecipeServiceImpl(_apiClient);
+        : RecipeServiceWithFallback(
+            RecipeServiceImpl(_apiClient),
+            MockRecipeService(),
+          );
     final AnalyticsService analyticsService =
         (ApiConfig.useMock || ApiConfig.useMockAnalytics)
         ? MockAnalyticsService()
