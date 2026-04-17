@@ -7,6 +7,7 @@ import 'package:second_serving_frontend/shared/models/enums.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/screens/scanned_items_review_screen.dart';
 import 'package:second_serving_frontend/features/inventory/services/receipt_scanner_service.dart';
+import 'package:second_serving_frontend/features/inventory/services/scan_telemetry_service.dart';
 import 'package:second_serving_frontend/features/notifications/application/local_notifications_service.dart';
 
 class AddItemScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _scannerService = ReceiptScannerService();
+  final _scanTelemetry = ScanTelemetryService();
   ItemCategory _selectedCategory = ItemCategory.fruits;
   int _quantity = 2;
   String _unit = 'Unidades';
@@ -102,27 +104,42 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   Future<void> _handleCameraScan() async {
     setState(() => _isScanning = true);
+    final stopwatch = Stopwatch()..start();
 
     try {
       final result = await _scannerService.scan();
+      stopwatch.stop();
 
       if (!mounted) return;
       setState(() => _isScanning = false);
 
       if (!result.success) {
-        if (result.errorMessage == 'Captura cancelada') return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.errorMessage ?? 'Error al escanear'),
-            action: SnackBarAction(
-              label: 'Ingreso manual',
-              textColor: Colors.white,
-              onPressed: () {},
+        final isCancelled = result.errorMessage == 'Captura cancelada';
+        if (!isCancelled) {
+          _scanTelemetry.recordScan(
+            success: false,
+            failureReason: result.errorMessage ?? 'unknown',
+            durationMs: stopwatch.elapsedMilliseconds,
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.errorMessage ?? 'Error al escanear'),
+              action: SnackBarAction(
+                label: 'Ingreso manual',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
             ),
-          ),
-        );
+          );
+        }
         return;
       }
+
+      _scanTelemetry.recordScan(
+        success: true,
+        productsDetected: result.products.length,
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
 
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -133,6 +150,13 @@ class _AddItemScreenState extends State<AddItemScreen> {
         ),
       );
     } catch (e) {
+      stopwatch.stop();
+      _scanTelemetry.recordScan(
+        success: false,
+        failureReason: 'exception: $e',
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
+
       if (!mounted) return;
       setState(() => _isScanning = false);
       ScaffoldMessenger.of(
