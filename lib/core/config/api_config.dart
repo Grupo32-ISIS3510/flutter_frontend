@@ -11,7 +11,7 @@ class ApiConfig {
 
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.20.28:8000',
+    defaultValue: 'http://3.16.198.192',
   );
   static const String apiPrefix = '/api/v1';
 
@@ -47,6 +47,9 @@ class ApiConfig {
   static const String analyticsSummary = '$apiPrefix/analytics/summary';
   static const String analyticsSegment = '$apiPrefix/analytics/segment';
   static const String analyticsDashboard = '$apiPrefix/analytics/dashboard';
+
+  // Telemetry
+  static const String telemetryScanEvent = '$apiPrefix/telemetry/scan-events';
 
   // Sync
   static const String syncPush = '$apiPrefix/sync/push';
