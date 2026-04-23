@@ -38,6 +38,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
                 child: CustomScrollView(
                   slivers: [
                     _buildAppBar(context),
+                    _buildStrategySelector(provider),
                     _buildIngredientChips(),
                     if (provider.suggestions.isEmpty)
                       SliverFillRemaining(
@@ -76,6 +77,79 @@ class _RecipesScreenState extends State<RecipesScreen> {
             GestureDetector(
               onTap: () {},
               child: const Icon(Icons.search, color: AppColors.textPrimary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStrategySelector(RecipeProvider provider) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ordenar por',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: provider.availableStrategies.map((strategy) {
+                final isActive = strategy.runtimeType == provider.activeStrategy.runtimeType;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => provider.setStrategy(strategy),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isActive ? AppColors.primary : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isActive
+                              ? AppColors.primary
+                              : AppColors.textLight.withValues(alpha: 0.4),
+                        ),
+                        boxShadow: isActive
+                            ? [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.25),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            strategy.icon,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            strategy.label,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isActive ? Colors.white : AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
           ],
         ),
