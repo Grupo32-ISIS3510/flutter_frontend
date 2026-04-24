@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:second_serving_frontend/features/inventory/models/inventory_item.dart';
 
@@ -6,6 +8,7 @@ import '../application/context_aware_service.dart';
 import '../data/services/location_service.dart';
 import '../data/services/weather_cache_service.dart';
 import '../data/services/weather_service.dart';
+import '../data/services/weather_sync_cache_service.dart';
 import '../domain/storage_recommendation_engine.dart';
 
 class ProductDetailContextPage extends StatefulWidget {
@@ -21,6 +24,7 @@ class ProductDetailContextPage extends StatefulWidget {
 class _ProductDetailContextPageState extends State<ProductDetailContextPage> {
   late final ContextAwareService _contextAwareService;
   late final StorageRecommendationEngine _recommendationEngine;
+  StreamSubscription<WeatherSyncState>? _syncStatusSubscription;
 
   ContextAwareState? _contextState;
 
@@ -41,8 +45,24 @@ class _ProductDetailContextPageState extends State<ProductDetailContextPage> {
           'Cargando clima local para personalizar recomendaciones...',
       fromCache: false,
       usingFallback: true,
+      isStale: false,
     );
+
+    _syncStatusSubscription = _contextAwareService.onSyncStatusChanged
+        .listen((WeatherSyncState state) {
+      if (mounted && state.status == WeatherSyncStatus.synced) {
+        _loadContext();
+      }
+    });
+
     _loadContext();
+  }
+
+  @override
+  void dispose() {
+    _syncStatusSubscription?.cancel();
+    _contextAwareService.dispose();
+    super.dispose();
   }
 
   Future<void> _loadContext() async {
@@ -405,7 +425,11 @@ class _FreshnessCard extends StatelessWidget {
       return 'Consumo sugerido';
     }
 
-    final String cacheLabel = state.fromCache ? ' · caché' : '';
+    final String cacheLabel = state.isStale
+        ? ' · desactualizado'
+        : state.fromCache
+            ? ' · caché'
+            : '';
     final int roundedTemp = state.weather!.temperatureCelsius.round();
     return '$roundedTemp°C · ${state.weather!.humidity}%$cacheLabel';
   }

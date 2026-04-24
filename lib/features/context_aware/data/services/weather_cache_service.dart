@@ -9,14 +9,10 @@ class WeatherCacheService {
   static const Duration _validFor = Duration(hours: 1);
 
   Future<WeatherSnapshot?> readValidSnapshot() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final String? raw = prefs.getString(_snapshotKey);
-    if (raw == null) {
+    final WeatherSnapshot? snapshot = await readAnySnapshot();
+    if (snapshot == null) {
       return null;
     }
-
-    final Map<String, dynamic> json = jsonDecode(raw) as Map<String, dynamic>;
-    final WeatherSnapshot snapshot = WeatherSnapshot.fromJson(json);
 
     final DateTime now = DateTime.now();
     if (now.difference(snapshot.fetchedAt) > _validFor) {
@@ -24,6 +20,17 @@ class WeatherCacheService {
     }
 
     return snapshot;
+  }
+
+  Future<WeatherSnapshot?> readAnySnapshot() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? raw = prefs.getString(_snapshotKey);
+    if (raw == null) {
+      return null;
+    }
+
+    final Map<String, dynamic> json = jsonDecode(raw) as Map<String, dynamic>;
+    return WeatherSnapshot.fromJson(json);
   }
 
   Future<void> saveSnapshot(WeatherSnapshot snapshot) async {
