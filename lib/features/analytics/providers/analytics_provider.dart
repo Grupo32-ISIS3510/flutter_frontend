@@ -6,6 +6,7 @@ class AnalyticsProvider extends ChangeNotifier {
   final AnalyticsService _service;
 
   DashboardResponse? _dashboard;
+  RecipeImpactResponse? _recipeImpact;
   List<WasteTrendItem> _wasteTrends = [];
   bool _isLoading = false;
   String? _error;
@@ -16,6 +17,8 @@ class AnalyticsProvider extends ChangeNotifier {
   SavingsResponse? get savings => _dashboard?.savings;
   WasteSummary? get wasteSummary => _dashboard?.wasteSummary;
   UserSegment? get segment => _dashboard?.segment;
+  RecipeImpactResponse? get recipeImpact =>
+      _recipeImpact ?? _dashboard?.recipeImpact;
   List<WasteTrendItem> get wasteTrends => _wasteTrends;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -27,6 +30,7 @@ class AnalyticsProvider extends ChangeNotifier {
 
     try {
       _dashboard = await _service.getDashboard(month: month, year: year);
+      _recipeImpact = _dashboard?.recipeImpact ?? _recipeImpact;
     } catch (e) {
       _error = e.toString();
     }
@@ -38,6 +42,16 @@ class AnalyticsProvider extends ChangeNotifier {
   Future<void> loadWasteTrends({int months = 3}) async {
     try {
       _wasteTrends = await _service.getWasteTrends(months: months);
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadRecipeImpact({int? month, int? year}) async {
+    try {
+      _recipeImpact = await _service.getRecipeImpact(month: month, year: year);
       notifyListeners();
     } catch (e) {
       _error = e.toString();

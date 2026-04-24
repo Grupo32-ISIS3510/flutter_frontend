@@ -91,22 +91,107 @@ class UserSegment {
   }
 }
 
+class RecipeRecommendationImpact {
+  final String recipeCategory;
+  final int totalRecommended;
+  final int itemsConsumed;
+  final int itemsDiscarded;
+  final double wasteReductionPercentage;
+  final double estimatedValueSavedCop;
+
+  const RecipeRecommendationImpact({
+    required this.recipeCategory,
+    required this.totalRecommended,
+    required this.itemsConsumed,
+    required this.itemsDiscarded,
+    required this.wasteReductionPercentage,
+    required this.estimatedValueSavedCop,
+  });
+
+  factory RecipeRecommendationImpact.fromJson(Map<String, dynamic> json) {
+    return RecipeRecommendationImpact(
+      recipeCategory:
+          (json['recipe_category'] ?? json['category'] ?? 'other') as String,
+      totalRecommended: _parseInt(json['total_recommended']),
+      itemsConsumed: _parseInt(json['items_consumed']),
+      itemsDiscarded: _parseInt(json['items_discarded']),
+      wasteReductionPercentage: _parseDouble(
+        json['waste_reduction_percentage'] ?? json['reduction_percentage'],
+      ),
+      estimatedValueSavedCop: _parseDouble(json['estimated_value_saved_cop']),
+    );
+  }
+}
+
+class RecipeImpactResponse {
+  final List<RecipeRecommendationImpact> impacts;
+  final double totalWasteReductionPercentage;
+  final double totalValueSavedCop;
+
+  const RecipeImpactResponse({
+    required this.impacts,
+    required this.totalWasteReductionPercentage,
+    required this.totalValueSavedCop,
+  });
+
+  factory RecipeImpactResponse.fromJson(Map<String, dynamic> json) {
+    final impactsList =
+        (json['impacts'] ?? json['data'] ?? json['recipe_impacts']) as List? ??
+        [];
+    return RecipeImpactResponse(
+      impacts: impactsList
+          .map(
+            (e) =>
+                RecipeRecommendationImpact.fromJson(e as Map<String, dynamic>),
+          )
+          .toList(),
+      totalWasteReductionPercentage: _parseDouble(
+        json['total_waste_reduction_percentage'] ??
+            json['total_reduction_percentage'],
+      ),
+      totalValueSavedCop: _parseDouble(json['total_value_saved_cop']),
+    );
+  }
+}
+
 class DashboardResponse {
   final SavingsResponse savings;
   final WasteSummary wasteSummary;
   final UserSegment segment;
+  final RecipeImpactResponse? recipeImpact;
 
   const DashboardResponse({
     required this.savings,
     required this.wasteSummary,
     required this.segment,
+    this.recipeImpact,
   });
 
   factory DashboardResponse.fromJson(Map<String, dynamic> json) {
     return DashboardResponse(
-      savings: SavingsResponse.fromJson(json['savings'] as Map<String, dynamic>),
-      wasteSummary: WasteSummary.fromJson(json['waste_summary'] as Map<String, dynamic>),
+      savings: SavingsResponse.fromJson(
+        json['savings'] as Map<String, dynamic>,
+      ),
+      wasteSummary: WasteSummary.fromJson(
+        json['waste_summary'] as Map<String, dynamic>,
+      ),
       segment: UserSegment.fromJson(json['segment'] as Map<String, dynamic>),
+      recipeImpact: json['recipe_impact'] == null
+          ? null
+          : RecipeImpactResponse.fromJson(
+              json['recipe_impact'] as Map<String, dynamic>,
+            ),
     );
   }
+}
+
+int _parseInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+double _parseDouble(dynamic value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '') ?? 0;
 }

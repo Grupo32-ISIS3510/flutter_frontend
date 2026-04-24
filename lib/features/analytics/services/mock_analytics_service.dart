@@ -32,4 +32,10 @@ class MockAnalyticsService implements AnalyticsService {
     await Future.delayed(const Duration(milliseconds: 300));
     return MockData.dashboard.segment;
   }
+
+  @override
+  Future<RecipeImpactResponse> getRecipeImpact({int? month, int? year}) async {
+    await Future.delayed(const Duration(milliseconds: 350));
+    return MockData.recipeImpact;
+  }
 }

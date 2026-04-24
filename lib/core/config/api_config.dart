@@ -47,6 +47,8 @@ class ApiConfig {
   static const String analyticsSummary = '$apiPrefix/analytics/summary';
   static const String analyticsSegment = '$apiPrefix/analytics/segment';
   static const String analyticsDashboard = '$apiPrefix/analytics/dashboard';
+  static const String analyticsRecipeImpact =
+      '$apiPrefix/analytics/recipe-impact';
 
   // Sync
   static const String syncPush = '$apiPrefix/sync/push';

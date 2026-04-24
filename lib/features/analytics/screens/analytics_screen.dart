@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
 import 'package:second_serving_frontend/core/config/format_helpers.dart';
+import 'package:second_serving_frontend/features/analytics/models/analytics.dart';
 import 'package:second_serving_frontend/features/analytics/providers/analytics_provider.dart';
+import 'package:second_serving_frontend/shared/models/enums.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -19,6 +21,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       if (!mounted) return;
       context.read<AnalyticsProvider>().loadDashboard();
       context.read<AnalyticsProvider>().loadWasteTrends();
+      context.read<AnalyticsProvider>().loadRecipeImpact();
     });
   }
 
@@ -34,6 +37,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               onRefresh: () async {
                 await provider.loadDashboard();
                 await provider.loadWasteTrends();
+                await provider.loadRecipeImpact();
               },
               child: ListView(
                 padding: const EdgeInsets.all(16),
@@ -55,6 +59,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ),
                     const SizedBox(height: 16),
                   ],
+                  if (provider.recipeImpact != null) ...[
+                    _RecipeImpactCard(impact: provider.recipeImpact!),
+                    const SizedBox(height: 16),
+                  ],
                   if (provider.segment != null)
                     _SegmentCard(
                       segment: provider.segment!.segment,
@@ -63,6 +71,115 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _RecipeImpactCard extends StatelessWidget {
+  final RecipeImpactResponse impact;
+
+  const _RecipeImpactCard({required this.impact});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = impact.impacts;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Impacto de recetas por categoría',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${impact.totalWasteReductionPercentage.toStringAsFixed(0)}% menos desperdicio estimado',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (items.isEmpty)
+              const Text(
+                'Aún no hay suficientes recetas recomendadas para calcular este indicador.',
+                style: TextStyle(color: AppColors.textSecondary),
+              )
+            else
+              ...items.map((item) => _RecipeImpactRow(item: item)),
+            const Divider(height: 24),
+            _SummaryRow(
+              icon: Icons.payments_outlined,
+              color: AppColors.success,
+              label: 'Valor salvado estimado',
+              value: FormatHelpers.currency(impact.totalValueSavedCop),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecipeImpactRow extends StatelessWidget {
+  final RecipeRecommendationImpact item;
+
+  const _RecipeImpactRow({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final category = RecipeCategory.fromString(item.recipeCategory);
+    final progress = (item.wasteReductionPercentage / 100).clamp(0.0, 1.0);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${category.emoji} ${category.label}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              Text(
+                '${item.wasteReductionPercentage.toStringAsFixed(0)}%',
+                style: const TextStyle(
+                  color: AppColors.success,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: AppColors.textLight.withValues(alpha: 0.2),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.success,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${item.itemsConsumed} consumidos de ${item.totalRecommended} recomendaciones',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

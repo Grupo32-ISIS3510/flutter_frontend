@@ -365,6 +365,46 @@ class MockData {
       recipesCookedLast30Days: 2,
       openRate: 0.4,
     ),
+    recipeImpact: recipeImpact,
+  );
+
+  static const recipeImpact = RecipeImpactResponse(
+    totalWasteReductionPercentage: 68.2,
+    totalValueSavedCop: 45000,
+    impacts: [
+      RecipeRecommendationImpact(
+        recipeCategory: 'lunch',
+        totalRecommended: 12,
+        itemsConsumed: 10,
+        itemsDiscarded: 2,
+        wasteReductionPercentage: 78.4,
+        estimatedValueSavedCop: 18500,
+      ),
+      RecipeRecommendationImpact(
+        recipeCategory: 'breakfast',
+        totalRecommended: 8,
+        itemsConsumed: 6,
+        itemsDiscarded: 2,
+        wasteReductionPercentage: 66.7,
+        estimatedValueSavedCop: 12200,
+      ),
+      RecipeRecommendationImpact(
+        recipeCategory: 'dinner',
+        totalRecommended: 7,
+        itemsConsumed: 5,
+        itemsDiscarded: 2,
+        wasteReductionPercentage: 60.5,
+        estimatedValueSavedCop: 10300,
+      ),
+      RecipeRecommendationImpact(
+        recipeCategory: 'snack',
+        totalRecommended: 5,
+        itemsConsumed: 3,
+        itemsDiscarded: 2,
+        wasteReductionPercentage: 50.0,
+        estimatedValueSavedCop: 4000,
+      ),
+    ],
   );
 
   static const List<WasteTrendItem> wasteTrends = [

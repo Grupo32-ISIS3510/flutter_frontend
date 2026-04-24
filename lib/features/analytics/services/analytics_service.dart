@@ -8,6 +8,7 @@ abstract class AnalyticsService {
   Future<List<WasteTrendItem>> getWasteTrends({int months = 3});
   Future<WasteSummary> getSummary();
   Future<UserSegment> getSegment();
+  Future<RecipeImpactResponse> getRecipeImpact({int? month, int? year});
 }
 
 class AnalyticsServiceImpl implements AnalyticsService {
@@ -20,7 +21,10 @@ class AnalyticsServiceImpl implements AnalyticsService {
     final params = <String, String>{};
     if (month != null) params['month'] = '$month';
     if (year != null) params['year'] = '$year';
-    final response = await _client.get(ApiConfig.analyticsDashboard, queryParams: params);
+    final response = await _client.get(
+      ApiConfig.analyticsDashboard,
+      queryParams: params,
+    );
     return DashboardResponse.fromJson(response);
   }
 
@@ -29,7 +33,10 @@ class AnalyticsServiceImpl implements AnalyticsService {
     final params = <String, String>{};
     if (month != null) params['month'] = '$month';
     if (year != null) params['year'] = '$year';
-    final response = await _client.get(ApiConfig.analyticsSavings, queryParams: params);
+    final response = await _client.get(
+      ApiConfig.analyticsSavings,
+      queryParams: params,
+    );
     return SavingsResponse.fromJson(response);
   }
 
@@ -40,7 +47,9 @@ class AnalyticsServiceImpl implements AnalyticsService {
       queryParams: {'months': '$months'},
     );
     final list = response['data'] as List? ?? [];
-    return list.map((e) => WasteTrendItem.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => WasteTrendItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -53,5 +62,17 @@ class AnalyticsServiceImpl implements AnalyticsService {
   Future<UserSegment> getSegment() async {
     final response = await _client.get(ApiConfig.analyticsSegment);
     return UserSegment.fromJson(response);
+  }
+
+  @override
+  Future<RecipeImpactResponse> getRecipeImpact({int? month, int? year}) async {
+    final params = <String, String>{};
+    if (month != null) params['month'] = '$month';
+    if (year != null) params['year'] = '$year';
+    final response = await _client.get(
+      ApiConfig.analyticsRecipeImpact,
+      queryParams: params,
+    );
+    return RecipeImpactResponse.fromJson(response);
   }
 }
