@@ -9,6 +9,7 @@ import 'package:second_serving_frontend/firebase_options.dart';
 import 'local_notifications_service.dart';
 
 import '../data/services/notifications_api_service.dart';
+import '../data/services/push_sync_cache_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -21,23 +22,33 @@ class PushNotificationsService {
   PushNotificationsService({
     required NotificationsApiService notificationsApiService,
     required Future<String?> Function() accessTokenProvider,
+    PushSyncCacheService? syncCacheService,
     FirebaseMessaging? firebaseMessaging,
     LocalNotificationsService? localNotificationsService,
   }) : _notificationsApiService = notificationsApiService,
        _accessTokenProvider = accessTokenProvider,
+       _syncCacheService = syncCacheService ?? PushSyncCacheService(),
        _firebaseMessagingOverride = firebaseMessaging,
        _localNotificationsService =
            localNotificationsService ?? LocalNotificationsService.instance;
 
   final NotificationsApiService _notificationsApiService;
   final Future<String?> Function() _accessTokenProvider;
+  final PushSyncCacheService _syncCacheService;
   final FirebaseMessaging? _firebaseMessagingOverride;
   final LocalNotificationsService _localNotificationsService;
   final StreamController<String> _notificationTapController =
       StreamController<String>.broadcast();
+  final StreamController<PushSyncState> _syncStatusController =
+      StreamController<PushSyncState>.broadcast();
   String? _pendingTapRoute;
+  bool _retryInFlight = false;
 
   Stream<String> get onNotificationTap => _notificationTapController.stream;
+  Stream<PushSyncState> get onSyncStatusChanged =>
+      _syncStatusController.stream;
+
+  Future<PushSyncState> readSyncStatus() => _syncCacheService.read();
 
   String? consumePendingTapRoute() {
     final String? route = _pendingTapRoute;
@@ -85,6 +96,10 @@ class PushNotificationsService {
           body: body,
           payload: route,
         );
+
+        // Recibir un push confirma que hay red: aprovechamos para drenar
+        // cualquier registro que haya quedado encolado por falta de conexión.
+        unawaited(retryPendingSync());
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
@@ -100,18 +115,46 @@ class PushNotificationsService {
   }
 
   Future<void> syncTokenIfPossible() async {
+    String? freshToken;
     try {
       await _ensureFirebaseInitialized();
-      final String? currentToken = await _firebaseMessaging.getToken().timeout(
+      freshToken = await _firebaseMessaging.getToken().timeout(
         const Duration(seconds: 8),
       );
-      if (currentToken != null) {
-        if (kDebugMode) {
-          debugPrint('FCM_TOKEN: $currentToken');
-        }
-        await _registerTokenIfPossible(currentToken);
+    } catch (_) {
+      // Firebase no está alcanzable (offline o fallo transitorio).
+      // Intentaremos con lo que haya en la cola persistente más abajo.
+    }
+
+    if (freshToken != null) {
+      if (kDebugMode) {
+        debugPrint('FCM_TOKEN: $freshToken');
       }
-    } catch (_) {}
+      await _registerTokenIfPossible(freshToken);
+      return;
+    }
+
+    // Sin token fresco disponible: si dejamos algo pendiente antes, reintentar.
+    await retryPendingSync();
+  }
+
+  /// Intenta re-registrar un token que quedó encolado por falta de conectividad
+  /// o sesión. Es idempotente y seguro de invocar desde múltiples triggers
+  /// (onMessage, onAuthenticated, foreground, etc.).
+  Future<void> retryPendingSync() async {
+    if (_retryInFlight) {
+      return;
+    }
+    _retryInFlight = true;
+    try {
+      final PushSyncState state = await _syncCacheService.read();
+      if (!state.hasPending) {
+        return;
+      }
+      await _registerTokenIfPossible(state.token!);
+    } finally {
+      _retryInFlight = false;
+    }
   }
 
   Future<void> _ensureFirebaseInitialized() async {
@@ -125,21 +168,54 @@ class PushNotificationsService {
   }
 
   Future<void> _registerTokenIfPossible(String token) async {
-    final String? authToken = await _accessTokenProvider();
-    if (authToken == null || authToken.isEmpty) {
+    String? authToken;
+    try {
+      authToken = await _accessTokenProvider();
+    } catch (error) {
+      await _syncCacheService.markPending(token, error: error.toString());
+      _emitStatusAsync();
       return;
     }
 
-    await _notificationsApiService.registerDevice(
-      authToken: authToken,
-      fcmToken: token,
-      platform: _platformValue,
-    );
+    if (authToken == null || authToken.isEmpty) {
+      await _syncCacheService.markPending(
+        token,
+        error: 'Sin sesión activa; se reintentará al iniciar sesión.',
+      );
+      _emitStatusAsync();
+      return;
+    }
 
-    await _notificationsApiService.updatePreferences(
-      authToken: authToken,
-      daysBeforeExpiry: _defaultDaysBeforeExpiry,
-      pushEnabled: true,
+    try {
+      await _notificationsApiService.registerDevice(
+        authToken: authToken,
+        fcmToken: token,
+        platform: _platformValue,
+      );
+
+      await _notificationsApiService.updatePreferences(
+        authToken: authToken,
+        daysBeforeExpiry: _defaultDaysBeforeExpiry,
+        pushEnabled: true,
+      );
+
+      await _syncCacheService.markSynced(token);
+      _emitStatusAsync();
+    } catch (error) {
+      // Fallo de red o backend: encolamos para reintentar en próximo evento
+      // de conectividad (onMessage, onAuthenticated, syncTokenIfPossible).
+      await _syncCacheService.markPending(token, error: error.toString());
+      _emitStatusAsync();
+    }
+  }
+
+  void _emitStatusAsync() {
+    unawaited(
+      _syncCacheService.read().then((PushSyncState state) {
+        if (!_syncStatusController.isClosed) {
+          _syncStatusController.add(state);
+        }
+      }).catchError((_) {}),
     );
   }
 
