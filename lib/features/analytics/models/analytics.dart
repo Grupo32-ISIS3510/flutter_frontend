@@ -154,17 +154,73 @@ class RecipeImpactResponse {
   }
 }
 
+class BehaviorPatternMetric {
+  final String metric;
+  final double passiveValue;
+  final double proactiveValue;
+  final String unit;
+  final String insight;
+
+  const BehaviorPatternMetric({
+    required this.metric,
+    required this.passiveValue,
+    required this.proactiveValue,
+    required this.unit,
+    required this.insight,
+  });
+
+  double get difference => proactiveValue - passiveValue;
+
+  factory BehaviorPatternMetric.fromJson(Map<String, dynamic> json) {
+    return BehaviorPatternMetric(
+      metric: (json['metric'] ?? json['name'] ?? json['pattern'] ?? '')
+          .toString(),
+      passiveValue: _parseDouble(
+        json['passive_value'] ?? json['passive'] ?? json['passive_users'],
+      ),
+      proactiveValue: _parseDouble(
+        json['proactive_value'] ?? json['proactive'] ?? json['proactive_users'],
+      ),
+      unit: (json['unit'] ?? '').toString(),
+      insight: (json['insight'] ?? json['description'] ?? '').toString(),
+    );
+  }
+}
+
+class BehaviorPatternsResponse {
+  final List<BehaviorPatternMetric> metrics;
+  final String summary;
+
+  const BehaviorPatternsResponse({
+    required this.metrics,
+    required this.summary,
+  });
+
+  factory BehaviorPatternsResponse.fromJson(Map<String, dynamic> json) {
+    final metricsList =
+        (json['metrics'] ?? json['patterns'] ?? json['data']) as List? ?? [];
+    return BehaviorPatternsResponse(
+      metrics: metricsList
+          .map((e) => BehaviorPatternMetric.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      summary: (json['summary'] ?? json['main_difference'] ?? '').toString(),
+    );
+  }
+}
+
 class DashboardResponse {
   final SavingsResponse savings;
   final WasteSummary wasteSummary;
   final UserSegment segment;
   final RecipeImpactResponse? recipeImpact;
+  final BehaviorPatternsResponse? behaviorPatterns;
 
   const DashboardResponse({
     required this.savings,
     required this.wasteSummary,
     required this.segment,
     this.recipeImpact,
+    this.behaviorPatterns,
   });
 
   factory DashboardResponse.fromJson(Map<String, dynamic> json) {
@@ -180,6 +236,11 @@ class DashboardResponse {
           ? null
           : RecipeImpactResponse.fromJson(
               json['recipe_impact'] as Map<String, dynamic>,
+            ),
+      behaviorPatterns: json['behavior_patterns'] == null
+          ? null
+          : BehaviorPatternsResponse.fromJson(
+              json['behavior_patterns'] as Map<String, dynamic>,
             ),
     );
   }

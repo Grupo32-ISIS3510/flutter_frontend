@@ -9,6 +9,7 @@ abstract class AnalyticsService {
   Future<WasteSummary> getSummary();
   Future<UserSegment> getSegment();
   Future<RecipeImpactResponse> getRecipeImpact({int? month, int? year});
+  Future<BehaviorPatternsResponse> getBehaviorPatterns({int? month, int? year});
 }
 
 class AnalyticsServiceImpl implements AnalyticsService {
@@ -74,5 +75,20 @@ class AnalyticsServiceImpl implements AnalyticsService {
       queryParams: params,
     );
     return RecipeImpactResponse.fromJson(response);
+  }
+
+  @override
+  Future<BehaviorPatternsResponse> getBehaviorPatterns({
+    int? month,
+    int? year,
+  }) async {
+    final params = <String, String>{};
+    if (month != null) params['month'] = '$month';
+    if (year != null) params['year'] = '$year';
+    final response = await _client.get(
+      ApiConfig.analyticsBehaviorPatterns,
+      queryParams: params,
+    );
+    return BehaviorPatternsResponse.fromJson(response);
   }
 }

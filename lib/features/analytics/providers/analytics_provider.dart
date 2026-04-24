@@ -7,6 +7,7 @@ class AnalyticsProvider extends ChangeNotifier {
 
   DashboardResponse? _dashboard;
   RecipeImpactResponse? _recipeImpact;
+  BehaviorPatternsResponse? _behaviorPatterns;
   List<WasteTrendItem> _wasteTrends = [];
   bool _isLoading = false;
   String? _error;
@@ -19,6 +20,8 @@ class AnalyticsProvider extends ChangeNotifier {
   UserSegment? get segment => _dashboard?.segment;
   RecipeImpactResponse? get recipeImpact =>
       _recipeImpact ?? _dashboard?.recipeImpact;
+  BehaviorPatternsResponse? get behaviorPatterns =>
+      _behaviorPatterns ?? _dashboard?.behaviorPatterns;
   List<WasteTrendItem> get wasteTrends => _wasteTrends;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -31,6 +34,7 @@ class AnalyticsProvider extends ChangeNotifier {
     try {
       _dashboard = await _service.getDashboard(month: month, year: year);
       _recipeImpact = _dashboard?.recipeImpact ?? _recipeImpact;
+      _behaviorPatterns = _dashboard?.behaviorPatterns ?? _behaviorPatterns;
     } catch (e) {
       _error = e.toString();
     }
@@ -52,6 +56,19 @@ class AnalyticsProvider extends ChangeNotifier {
   Future<void> loadRecipeImpact({int? month, int? year}) async {
     try {
       _recipeImpact = await _service.getRecipeImpact(month: month, year: year);
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadBehaviorPatterns({int? month, int? year}) async {
+    try {
+      _behaviorPatterns = await _service.getBehaviorPatterns(
+        month: month,
+        year: year,
+      );
       notifyListeners();
     } catch (e) {
       _error = e.toString();

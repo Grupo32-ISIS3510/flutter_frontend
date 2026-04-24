@@ -366,6 +366,7 @@ class MockData {
       openRate: 0.4,
     ),
     recipeImpact: recipeImpact,
+    behaviorPatterns: behaviorPatterns,
   );
 
   static const recipeImpact = RecipeImpactResponse(
@@ -403,6 +404,41 @@ class MockData {
         itemsDiscarded: 2,
         wasteReductionPercentage: 50.0,
         estimatedValueSavedCop: 4000,
+      ),
+    ],
+  );
+
+  static const behaviorPatterns = BehaviorPatternsResponse(
+    summary:
+        'Los usuarios proactivos responden antes a productos por vencer, cocinan más recetas sugeridas y desperdician menos inventario.',
+    metrics: [
+      BehaviorPatternMetric(
+        metric: 'Recetas cocinadas en 30 días',
+        passiveValue: 1.2,
+        proactiveValue: 5.8,
+        unit: 'recetas',
+        insight: 'Mayor adopción de recomendaciones en usuarios proactivos.',
+      ),
+      BehaviorPatternMetric(
+        metric: 'Apertura de alertas',
+        passiveValue: 28,
+        proactiveValue: 74,
+        unit: '%',
+        insight: 'Los proactivos interactúan más con recordatorios.',
+      ),
+      BehaviorPatternMetric(
+        metric: 'Acciones antes de vencer',
+        passiveValue: 18,
+        proactiveValue: 67,
+        unit: '%',
+        insight: 'Más consumo o planificación antes de la fecha límite.',
+      ),
+      BehaviorPatternMetric(
+        metric: 'Tasa de descarte',
+        passiveValue: 31,
+        proactiveValue: 9,
+        unit: '%',
+        insight: 'Los pasivos descartan una proporción mayor del inventario.',
       ),
     ],
   );
