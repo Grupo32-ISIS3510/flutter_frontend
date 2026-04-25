@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
+import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/recipes/config/recipe_images.dart';
 import 'package:second_serving_frontend/features/recipes/models/recipe.dart';
 import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
 import 'package:second_serving_frontend/features/recipes/screens/recipe_detail_screen.dart';
-import 'package:second_serving_frontend/shared/services/mock_data.dart';
 
 class RecipesScreen extends StatefulWidget {
   const RecipesScreen({super.key});
@@ -158,7 +158,12 @@ class _RecipesScreenState extends State<RecipesScreen> {
   }
 
   Widget _buildIngredientChips() {
-    final ingredients = MockData.expiringIngredientNames;
+    final inventoryItems = context.watch<InventoryProvider>().expiringItems;
+    final ingredients = inventoryItems
+        .map((item) => item.name)
+        .toSet()
+        .take(8)
+        .toList();
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -208,14 +213,20 @@ class _RecipesScreenState extends State<RecipesScreen> {
   }
 
   Widget _buildRecipeList(List<RecipeSummary> recipes) {
+    final inventoryNames = context
+        .watch<InventoryProvider>()
+        .items
+        .where((item) => item.isActive)
+        .map((item) => item.name.toLowerCase().trim())
+        .toSet();
+
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, i) => _RecipeCard(
             recipe: recipes[i],
-            matchedIngredients:
-                MockData.recipeMatchedIngredients[recipes[i].id] ?? [],
+            inventoryNames: inventoryNames,
           ),
           childCount: recipes.length,
         ),
@@ -255,11 +266,11 @@ class _RecipesScreenState extends State<RecipesScreen> {
 
 class _RecipeCard extends StatelessWidget {
   final RecipeSummary recipe;
-  final List<String> matchedIngredients;
+  final Set<String> inventoryNames;
 
   const _RecipeCard({
     required this.recipe,
-    required this.matchedIngredients,
+    required this.inventoryNames,
   });
 
   @override
@@ -358,14 +369,14 @@ class _RecipeCard extends StatelessWidget {
                     color: AppColors.textPrimary,
                   ),
                 ),
-                if (matchedIngredients.isNotEmpty) ...[
+                if (recipe.inventoryMatches > 0) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'INGREDIENTES: ${matchedIngredients.join(', ').toUpperCase()}',
+                    '${recipe.inventoryMatches} INGREDIENTE${recipe.inventoryMatches == 1 ? '' : 'S'} EN TU DESPENSA',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
+                      color: AppColors.primary,
                       letterSpacing: 0.3,
                     ),
                   ),

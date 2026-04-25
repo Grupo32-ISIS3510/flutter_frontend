@@ -27,6 +27,11 @@ import 'package:second_serving_frontend/features/notifications/application/push_
 import 'package:second_serving_frontend/features/notifications/application/local_notifications_service.dart';
 import 'package:second_serving_frontend/features/notifications/data/services/notifications_api_service.dart';
 import 'package:second_serving_frontend/firebase_options.dart';
+import 'package:second_serving_frontend/core/network/connectivity_service.dart';
+import 'package:second_serving_frontend/core/network/connectivity_provider.dart';
+import 'package:second_serving_frontend/features/inventory/services/scan_telemetry_service.dart';
+import 'package:second_serving_frontend/features/inventory/services/expiry_telemetry_service.dart';
+import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
 
 const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 late final PushNotificationsService _pushNotificationsService;
@@ -35,6 +40,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('es', null);
   await LocalNotificationsService.instance.initialize();
+  await ConnectivityService.instance.initialize();
 
   _pushNotificationsService = PushNotificationsService(
     notificationsApiService: NotificationsApiService(
@@ -78,6 +84,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
   late final InventoryProvider _inventoryProvider;
   late final RecipeProvider _recipeProvider;
   late final AnalyticsProvider _analyticsProvider;
+  late final ConnectivityProvider _connectivityProvider;
   late final GoRouter _router;
 
   StreamSubscription<String>? _pushTapSubscription;
@@ -98,10 +105,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
     final RecipeService recipeService =
         (ApiConfig.useMock || ApiConfig.useMockRecipes)
         ? MockRecipeService()
-        : RecipeServiceWithFallback(
-            RecipeServiceImpl(_apiClient),
-            MockRecipeService(),
-          );
+        : RecipeServiceImpl(_apiClient);
     final AnalyticsService analyticsService =
         (ApiConfig.useMock || ApiConfig.useMockAnalytics)
         ? MockAnalyticsService()
@@ -115,6 +119,12 @@ class _SecondServingAppState extends State<SecondServingApp> {
     _inventoryProvider = InventoryProvider(inventoryService);
     _recipeProvider = RecipeProvider(recipeService);
     _analyticsProvider = AnalyticsProvider(analyticsService);
+    _connectivityProvider = ConnectivityProvider(
+      inventoryProvider: _inventoryProvider,
+      expiryTelemetry: ExpiryTelemetryService(apiClient: _apiClient),
+      screenAnalytics: ScreenAnalyticsService(apiClient: _apiClient),
+      scanTelemetry: ScanTelemetryService(apiClient: _apiClient),
+    );
     _router = createRouter(_authProvider);
 
     _pushTapSubscription = _pushNotificationsService.onNotificationTap.listen(
@@ -141,6 +151,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
   void dispose() {
     _pushTapSubscription?.cancel();
     _localTapSubscription?.cancel();
+    _connectivityProvider.dispose();
     _inventoryProvider.dispose();
     _recipeProvider.dispose();
     _analyticsProvider.dispose();
@@ -157,6 +168,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
         ChangeNotifierProvider.value(value: _inventoryProvider),
         ChangeNotifierProvider.value(value: _recipeProvider),
         ChangeNotifierProvider.value(value: _analyticsProvider),
+        ChangeNotifierProvider.value(value: _connectivityProvider),
       ],
       child: MaterialApp.router(
         title: 'Second Serving',

@@ -8,6 +8,7 @@ import 'package:second_serving_frontend/features/inventory/providers/inventory_p
 import 'package:second_serving_frontend/features/inventory/screens/scanned_items_review_screen.dart';
 import 'package:second_serving_frontend/features/inventory/services/receipt_scanner_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/scan_telemetry_service.dart';
+import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
 import 'package:second_serving_frontend/features/notifications/application/local_notifications_service.dart';
 
 class AddItemScreen extends StatefulWidget {
@@ -24,6 +25,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _nameController = TextEditingController();
   final _scannerService = ReceiptScannerService();
   final _scanTelemetry = ScanTelemetryService();
+  final _screenAnalytics = ScreenAnalyticsService();
+  bool _exitRecorded = false;
   ItemCategory _selectedCategory = ItemCategory.fruits;
   int _quantity = 2;
   String _unit = 'Unidades';
@@ -97,7 +100,20 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _screenAnalytics.recordEnter('add_item');
+  }
+
+  void _recordExitOnce(String reason) {
+    if (_exitRecorded) return;
+    _exitRecorded = true;
+    _screenAnalytics.recordExit('add_item', reason);
+  }
+
+  @override
   void dispose() {
+    _recordExitOnce('back');
     _nameController.dispose();
     super.dispose();
   }
@@ -140,6 +156,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
         productsDetected: result.products.length,
         durationMs: stopwatch.elapsedMilliseconds,
       );
+
+      _recordExitOnce('scan_started');
 
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -272,14 +290,14 @@ class _AddItemScreenState extends State<AddItemScreen> {
       'notes': 'Ubicación: $_location',
     };
 
-    final success = await context.read<InventoryProvider>().addItem(data);
+    final result = await context.read<InventoryProvider>().addItem(data);
     if (!mounted) {
       return;
     }
 
     setState(() => _isSaving = false);
 
-    if (success) {
+    if (result != null) {
       final DateTime today = DateUtils.dateOnly(DateTime.now());
       final int daysRemaining = _expiryDate.difference(today).inDays;
 
@@ -294,19 +312,32 @@ class _AddItemScreenState extends State<AddItemScreen> {
         }
       }
 
+      if (result == 'queued' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Guardado localmente — se sincronizará cuando haya conexión'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
+      _recordExitOnce('completed_manual');
       Navigator.of(context).pop(true);
       return;
     }
 
-    final error = context.read<InventoryProvider>().error;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error ?? 'No se pudo guardar el alimento')),
+      const SnackBar(content: Text('No se pudo guardar el alimento')),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) _recordExitOnce('back');
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
@@ -342,6 +373,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 

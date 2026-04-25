@@ -10,6 +10,8 @@ class ScannedProduct {
   double? price;
   ItemCategory category;
   bool selected;
+  DateTime? expiryDate;
+  bool expiryDateFromOcr;
 
   ScannedProduct({
     required this.name,
@@ -18,6 +20,8 @@ class ScannedProduct {
     this.price,
     this.category = ItemCategory.other,
     this.selected = true,
+    this.expiryDate,
+    this.expiryDateFromOcr = false,
   });
 }
 

@@ -5,8 +5,24 @@ import 'package:second_serving_frontend/features/inventory/services/receipt_scan
 /// Transforma texto crudo de un recibo en una lista estructurada de
 /// productos. Aplica filtrado de ruido, extracción de precio/cantidad
 /// mediante regex, y clasificación automática por categoría.
+/// También intenta detectar fechas de vencimiento del texto OCR.
 class ReceiptParserService {
+  static final List<RegExp> _expiryPatterns = [
+    RegExp(
+      r'(?:ven(?:ce|cimiento)?|exp(?:iry|ira)?|fv|f\.?\s*v|caduc(?:a|idad)?|best\s*before)\s*[:\-]?\s*(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})',
+    ),
+    RegExp(
+      r'(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})',
+    ),
+  ];
+
   List<ScannedProduct> parse(String rawText) {
+    final expiryDate = extractExpiryDate(rawText);
+
     final lines =
         rawText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
     final products = <ScannedProduct>[];
@@ -14,10 +30,65 @@ class ReceiptParserService {
     for (final line in lines) {
       if (_isNoiseLine(line)) continue;
       final product = _parseLine(line);
-      if (product != null) products.add(product);
+      if (product != null) {
+        if (expiryDate != null) {
+          product.expiryDate = expiryDate;
+          product.expiryDateFromOcr = true;
+        }
+        products.add(product);
+      }
     }
 
     return products;
+  }
+
+  /// Busca fechas de vencimiento en el texto OCR completo.
+  /// Retorna la primera fecha futura válida encontrada, o null.
+  DateTime? extractExpiryDate(String rawText) {
+    for (final pattern in _expiryPatterns) {
+      for (final match in pattern.allMatches(rawText)) {
+        final date = _parseMatchToDate(match, pattern);
+        if (date != null) return date;
+      }
+    }
+    return null;
+  }
+
+  DateTime? _parseMatchToDate(RegExpMatch match, RegExp pattern) {
+    try {
+      int day, month, year;
+
+      if (pattern == _expiryPatterns.last) {
+        year = int.parse(match.group(1)!);
+        month = int.parse(match.group(2)!);
+        day = int.parse(match.group(3)!);
+      } else {
+        day = int.parse(match.group(1)!);
+        month = int.parse(match.group(2)!);
+        year = int.parse(match.group(3)!);
+      }
+
+      if (year < 100) year += 2000;
+
+      if (month < 1 || month > 12) {
+        if (day >= 1 && day <= 12) {
+          final temp = day;
+          day = month;
+          month = temp;
+        } else {
+          return null;
+        }
+      }
+      if (day < 1 || day > 31) return null;
+
+      final date = DateTime(year, month, day);
+      final now = DateTime.now();
+      if (date.isBefore(now.subtract(const Duration(days: 30)))) return null;
+
+      return date;
+    } catch (_) {
+      return null;
+    }
   }
 
   bool _isNoiseLine(String line) {
@@ -27,7 +98,7 @@ class ReceiptParserService {
     const noisePatterns = [
       'total', 'subtotal', 'sub-total', 'iva', 'impuesto',
       'cambio', 'efectivo', 'tarjeta', 'nit', 'factura',
-      'fecha', 'hora', 'caja', 'cajero', 'tel', 'dir',
+      'hora', 'caja', 'cajero', 'tel', 'dir',
       'gracias', 'vuelva', 'bienvenido', 'recibo', 'ticket',
       'rut', 'boleta', 'cliente', 'vendedor', 'sucursal',
       'descuento', 'ahorro', 'puntos', 'devolucion',
