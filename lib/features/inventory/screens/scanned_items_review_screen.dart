@@ -267,20 +267,12 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
           ),
           if (withDate > 0) ...[
             const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.auto_awesome, color: Colors.orange, size: 16),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Vencimiento estimado por categoría — puedes editar cada fecha',
-                    style: TextStyle(
-                      color: Colors.orange.shade700,
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              'Vencimiento estimado por categoría — puedes editar cada fecha',
+              style: TextStyle(
+                color: Colors.orange.shade700,
+                fontSize: 11,
+              ),
             ),
           ],
         ],
@@ -438,31 +430,17 @@ class _ProductCard extends StatelessWidget {
                       ),
                       if (product.expiryDate != null) ...[
                         const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(
-                              product.expiryDateFromOcr
-                                  ? Icons.auto_fix_high
-                                  : Icons.auto_awesome,
-                              size: 12,
-                              color: product.expiryDateFromOcr
-                                  ? AppColors.primary
-                                  : Colors.orange,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              product.expiryDateFromOcr
-                                  ? 'Vence: ${formatDate(product.expiryDate!)}'
-                                  : 'Vence: ${formatDate(product.expiryDate!)} (estimada)',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: product.expiryDateFromOcr
-                                    ? AppColors.primary
-                                    : Colors.orange.shade700,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
+                        Text(
+                          product.expiryDateFromOcr
+                              ? 'Vence: ${formatDate(product.expiryDate!)}'
+                              : 'Vence: ${formatDate(product.expiryDate!)} (estimada)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: product.expiryDateFromOcr
+                                ? AppColors.primary
+                                : Colors.orange.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ],
