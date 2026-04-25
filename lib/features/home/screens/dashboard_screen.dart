@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -28,7 +30,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<AnalyticsProvider>().loadDashboard();
+      final analytics = context.read<AnalyticsProvider>();
+      analytics.loadDashboard();
+      analytics.loadMonthlySavings();
       context
           .read<InventoryProvider>()
           .loadExpiringItems(days: _expiringDaysWindow);
@@ -53,9 +57,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final analyticsP = context.read<AnalyticsProvider>();
             final inventoryP = context.read<InventoryProvider>();
             final recipeP = context.read<RecipeProvider>();
-            await analyticsP.loadDashboard();
-            await inventoryP.loadExpiringItems(days: _expiringDaysWindow);
-            await recipeP.loadSuggestions(limit: 3);
+            await Future.wait([
+              analyticsP.loadDashboard(),
+              analyticsP.loadMonthlySavings(),
+              inventoryP.loadExpiringItems(days: _expiringDaysWindow),
+              recipeP.loadSuggestions(limit: 3),
+            ]);
           },
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -332,9 +339,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         else
           SizedBox(
             height: 150,
+            // Capamos el carrusel a 10 cards para evitar materializar todas
+            // las cards en memoria con inventarios grandes.
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: filtered.length,
+              itemCount: math.min(filtered.length, 10),
               separatorBuilder: (_, _) => const SizedBox(width: 12),
               itemBuilder: (context, i) =>
                   _ExpiringItemCard(item: filtered[i]),
