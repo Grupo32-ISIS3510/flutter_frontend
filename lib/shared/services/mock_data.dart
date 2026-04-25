@@ -356,6 +356,82 @@ class MockData {
       recipesCookedLast30Days: 2,
       openRate: 0.4,
     ),
+    recipeImpact: recipeImpact,
+    behaviorPatterns: behaviorPatterns,
+  );
+
+  static const recipeImpact = RecipeImpactResponse(
+    totalWasteReductionPercentage: 68.2,
+    totalValueSavedCop: 45000,
+    impacts: [
+      RecipeRecommendationImpact(
+        recipeCategory: 'lunch',
+        totalRecommended: 12,
+        itemsConsumed: 10,
+        itemsDiscarded: 2,
+        wasteReductionPercentage: 78.4,
+        estimatedValueSavedCop: 18500,
+      ),
+      RecipeRecommendationImpact(
+        recipeCategory: 'breakfast',
+        totalRecommended: 8,
+        itemsConsumed: 6,
+        itemsDiscarded: 2,
+        wasteReductionPercentage: 66.7,
+        estimatedValueSavedCop: 12200,
+      ),
+      RecipeRecommendationImpact(
+        recipeCategory: 'dinner',
+        totalRecommended: 7,
+        itemsConsumed: 5,
+        itemsDiscarded: 2,
+        wasteReductionPercentage: 60.5,
+        estimatedValueSavedCop: 10300,
+      ),
+      RecipeRecommendationImpact(
+        recipeCategory: 'snack',
+        totalRecommended: 5,
+        itemsConsumed: 3,
+        itemsDiscarded: 2,
+        wasteReductionPercentage: 50.0,
+        estimatedValueSavedCop: 4000,
+      ),
+    ],
+  );
+
+  static const behaviorPatterns = BehaviorPatternsResponse(
+    summary:
+        'Los usuarios proactivos responden antes a productos por vencer, cocinan más recetas sugeridas y desperdician menos inventario.',
+    metrics: [
+      BehaviorPatternMetric(
+        metric: 'Recetas cocinadas en 30 días',
+        passiveValue: 1.2,
+        proactiveValue: 5.8,
+        unit: 'recetas',
+        insight: 'Mayor adopción de recomendaciones en usuarios proactivos.',
+      ),
+      BehaviorPatternMetric(
+        metric: 'Apertura de alertas',
+        passiveValue: 28,
+        proactiveValue: 74,
+        unit: '%',
+        insight: 'Los proactivos interactúan más con recordatorios.',
+      ),
+      BehaviorPatternMetric(
+        metric: 'Acciones antes de vencer',
+        passiveValue: 18,
+        proactiveValue: 67,
+        unit: '%',
+        insight: 'Más consumo o planificación antes de la fecha límite.',
+      ),
+      BehaviorPatternMetric(
+        metric: 'Tasa de descarte',
+        passiveValue: 31,
+        proactiveValue: 9,
+        unit: '%',
+        insight: 'Los pasivos descartan una proporción mayor del inventario.',
+      ),
+    ],
   );
 
   static const List<WasteTrendItem> wasteTrends = [

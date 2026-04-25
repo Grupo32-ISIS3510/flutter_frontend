@@ -20,20 +20,20 @@ class ScanEvent {
   });
 
   Map<String, dynamic> toJson() => {
-        'timestamp': timestamp.toIso8601String(),
-        'success': success,
-        if (failureReason != null) 'failure_reason': failureReason,
-        'products_detected': productsDetected,
-        'duration_ms': durationMs,
-      };
+    'timestamp': timestamp.toIso8601String(),
+    'success': success,
+    if (failureReason != null) 'failure_reason': failureReason,
+    'products_detected': productsDetected,
+    'duration_ms': durationMs,
+  };
 
   factory ScanEvent.fromJson(Map<String, dynamic> json) => ScanEvent(
-        timestamp: DateTime.parse(json['timestamp'] as String),
-        success: json['success'] as bool,
-        failureReason: json['failure_reason'] as String?,
-        productsDetected: json['products_detected'] as int? ?? 0,
-        durationMs: json['duration_ms'] as int? ?? 0,
-      );
+    timestamp: DateTime.parse(json['timestamp'] as String),
+    success: json['success'] as bool,
+    failureReason: json['failure_reason'] as String?,
+    productsDetected: json['products_detected'] as int? ?? 0,
+    durationMs: json['duration_ms'] as int? ?? 0,
+  );
 }
 
 class ScanTelemetryService {
@@ -57,9 +57,11 @@ class ScanTelemetryService {
       durationMs: durationMs,
     );
 
-    debugPrint('[ScanTelemetry] ${success ? "OK" : "FAIL"}'
-        '${failureReason != null ? " ($failureReason)" : ""}'
-        ' — ${productsDetected} products, ${durationMs}ms');
+    debugPrint(
+      '[ScanTelemetry] ${success ? "OK" : "FAIL"}'
+      '${failureReason != null ? " ($failureReason)" : ""}'
+      ' — $productsDetected products, ${durationMs}ms',
+    );
 
     await _saveLocally(event);
     await _tryPushToBackend(event);
@@ -75,10 +77,7 @@ class ScanTelemetryService {
   Future<void> _tryPushToBackend(ScanEvent event) async {
     if (_apiClient == null) return;
     try {
-      await _apiClient.post(
-        ApiConfig.telemetryScanEvent,
-        body: event.toJson(),
-      );
+      await _apiClient.post(ApiConfig.telemetryScanEvent, body: event.toJson());
     } catch (e) {
       debugPrint('[ScanTelemetry] Backend push failed (stored locally): $e');
     }
