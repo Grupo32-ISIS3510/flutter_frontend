@@ -179,6 +179,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
     return MultiProvider(
       providers: [
         Provider<ConnectivityService>.value(value: _connectivityService),
+        Provider<ApiClient>.value(value: _apiClient),
         ChangeNotifierProvider.value(value: _authProvider),
         ChangeNotifierProvider.value(value: _inventoryProvider),
         ChangeNotifierProvider.value(value: _recipeProvider),

@@ -5,6 +5,7 @@ import 'package:second_serving_frontend/core/config/app_theme.dart';
 import 'package:second_serving_frontend/shared/models/enums.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/services/receipt_scanner_service.dart';
+import 'package:second_serving_frontend/core/network/api_client.dart';
 import 'package:second_serving_frontend/features/inventory/services/expiry_telemetry_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
 import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
@@ -27,15 +28,27 @@ class ScannedItemsReviewScreen extends StatefulWidget {
 class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
   late List<ScannedProduct> _products;
   bool _isSaving = false;
-  final _expiryTelemetry = ExpiryTelemetryService();
-  final _screenAnalytics = ScreenAnalyticsService();
+  late final ExpiryTelemetryService _expiryTelemetry;
+  late final ScreenAnalyticsService _screenAnalytics;
   bool _exitRecorded = false;
+  bool _servicesInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _products = widget.products;
-    _screenAnalytics.recordEnter('scanned_review');
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_servicesInitialized) {
+      _servicesInitialized = true;
+      final apiClient = context.read<ApiClient>();
+      _expiryTelemetry = ExpiryTelemetryService(apiClient: apiClient);
+      _screenAnalytics = ScreenAnalyticsService(apiClient: apiClient);
+      _screenAnalytics.recordEnter('scanned_review');
+    }
   }
 
   void _recordExitOnce(String reason) {
@@ -243,7 +256,7 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
   }
 
   Widget _buildSummaryBar() {
-    final withDate = _products.where((p) => p.expiryDateFromOcr).length;
+    final withDate = _products.where((p) => p.expiryDate != null).length;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -272,18 +285,12 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
           ),
           if (withDate > 0) ...[
             const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.calendar_month, color: AppColors.primary, size: 16),
-                const SizedBox(width: 6),
-                Text(
-                  'Fecha de vencimiento detectada en $withDate producto${withDate == 1 ? '' : 's'}',
-                  style: TextStyle(
-                    color: AppColors.primary.withValues(alpha: 0.8),
-                    fontSize: 11,
-                  ),
-                ),
-              ],
+            Text(
+              'Vencimiento estimado por categoría — puedes editar cada fecha',
+              style: TextStyle(
+                color: Colors.orange.shade700,
+                fontSize: 11,
+              ),
             ),
           ],
         ],
@@ -448,31 +455,17 @@ class _ProductCard extends StatelessWidget {
                       ),
                       if (product.expiryDate != null) ...[
                         const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(
-                              product.expiryDateFromOcr
-                                  ? Icons.auto_fix_high
-                                  : Icons.edit_calendar,
-                              size: 12,
-                              color: product.expiryDateFromOcr
-                                  ? AppColors.primary
-                                  : AppColors.textSecondary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Vence: ${formatDate(product.expiryDate!)}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: product.expiryDateFromOcr
-                                    ? AppColors.primary
-                                    : AppColors.textSecondary,
-                                fontWeight: product.expiryDateFromOcr
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ],
+                        Text(
+                          product.expiryDateFromOcr
+                              ? 'Vence: ${formatDate(product.expiryDate!)}'
+                              : 'Vence: ${formatDate(product.expiryDate!)} (estimada)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: product.expiryDateFromOcr
+                                ? AppColors.primary
+                                : Colors.orange.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ],
@@ -690,7 +683,7 @@ class _EditProductSheetState extends State<_EditProductSheet> {
               ),
               child: Text(
                 _expiryDate != null
-                    ? DateFormat('d MMM yyyy', 'es').format(_expiryDate!)
+                    ? '${DateFormat('d MMM yyyy', 'es').format(_expiryDate!)}${_originalFromOcr ? '' : ' (estimada)'}'
                     : 'No detectada — toca para asignar',
                 style: TextStyle(
                   color: _expiryDate != null

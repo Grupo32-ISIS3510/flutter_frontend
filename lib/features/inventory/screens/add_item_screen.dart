@@ -7,6 +7,7 @@ import 'package:second_serving_frontend/shared/models/enums.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/screens/scanned_items_review_screen.dart';
 import 'package:second_serving_frontend/features/inventory/services/receipt_scanner_service.dart';
+import 'package:second_serving_frontend/core/network/api_client.dart';
 import 'package:second_serving_frontend/features/inventory/services/scan_telemetry_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
 import 'package:second_serving_frontend/features/notifications/application/local_notifications_service.dart';
@@ -25,8 +26,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _nameController = TextEditingController();
   final _unitPriceController = TextEditingController();
   final _scannerService = ReceiptScannerService();
-  final _scanTelemetry = ScanTelemetryService();
-  final _screenAnalytics = ScreenAnalyticsService();
+  late final ScanTelemetryService _scanTelemetry;
+  late final ScreenAnalyticsService _screenAnalytics;
   bool _exitRecorded = false;
   ItemCategory _selectedCategory = ItemCategory.fruits;
   int _quantity = 2;
@@ -100,10 +101,18 @@ class _AddItemScreenState extends State<AddItemScreen> {
     }
   }
 
+  bool _servicesInitialized = false;
+
   @override
-  void initState() {
-    super.initState();
-    _screenAnalytics.recordEnter('add_item');
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_servicesInitialized) {
+      _servicesInitialized = true;
+      final apiClient = context.read<ApiClient>();
+      _scanTelemetry = ScanTelemetryService(apiClient: apiClient);
+      _screenAnalytics = ScreenAnalyticsService(apiClient: apiClient);
+      _screenAnalytics.recordEnter('add_item');
+    }
   }
 
   void _recordExitOnce(String reason) {
