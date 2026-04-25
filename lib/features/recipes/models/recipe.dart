@@ -23,6 +23,13 @@ class RecipeIngredient {
       unit: json['unit'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'ingredient_name': ingredientName,
+        if (quantity != null) 'quantity': quantity,
+        if (unit != null) 'unit': unit,
+      };
 }
 
 class RecipeSummary {
@@ -58,6 +65,17 @@ class RecipeSummary {
       inventoryMatches: json['inventory_matches'] as int? ?? 0,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (description != null) 'description': description,
+        'category': category.value,
+        if (prepTimeMinutes != null) 'prep_time_minutes': prepTimeMinutes,
+        'servings': servings,
+        if (imageUrl != null) 'image_url': imageUrl,
+        'inventory_matches': inventoryMatches,
+      };
 }
 
 class RecipeDetail {
@@ -104,6 +122,20 @@ class RecipeDetail {
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (description != null) 'description': description,
+        'instructions': instructions,
+        if (prepTimeMinutes != null) 'prep_time_minutes': prepTimeMinutes,
+        'servings': servings,
+        'category': category.value,
+        if (imageUrl != null) 'image_url': imageUrl,
+        'ingredients': ingredients.map((e) => e.toJson()).toList(),
+        'inventory_matches': inventoryMatches,
+        'created_at': createdAt.toIso8601String(),
+      };
 }
 
 class RecipeListResponse {

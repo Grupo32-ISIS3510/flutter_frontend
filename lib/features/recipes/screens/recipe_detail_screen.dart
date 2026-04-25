@@ -58,15 +58,43 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     final recipeProvider = context.read<RecipeProvider>();
     final inventoryProvider = context.read<InventoryProvider>();
     final messenger = ScaffoldMessenger.of(context);
+
     await recipeProvider.markAsCooked(widget.recipeId);
 
+    // Cargar inventario completo para asegurar que tengamos todos los items
+    await inventoryProvider.loadItems(limit: 100);
+
+    if (!mounted) return;
+
+    // Cruzar ingredientes de la receta con items activos del inventario por nombre
+    final ingredientNames = recipe.ingredients
+        .map((i) => i.ingredientName.toLowerCase().trim())
+        .toSet();
+
+    final matchingItems = inventoryProvider.items
+        .where((item) =>
+            item.isActive &&
+            ingredientNames.any((name) =>
+                item.name.toLowerCase().trim().contains(name) ||
+                name.contains(item.name.toLowerCase().trim())))
+        .toList();
+
+    for (final item in matchingItems) {
+      await inventoryProvider.consumeItem(item.id);
+    }
+
     if (mounted) {
-      await inventoryProvider.loadItems();
       setState(() => _isCooking = false);
+      final consumed = matchingItems.length;
       messenger.showSnackBar(
         SnackBar(
-          content: Text('¡${recipe.name} cocinada!'),
-          backgroundColor: AppColors.success,
+          content: Text(
+            consumed > 0
+                ? '¡${recipe.name} cocinada! $consumed ingrediente${consumed == 1 ? '' : 's'} consumido${consumed == 1 ? '' : 's'}.'
+                : '¡${recipe.name} cocinada! No se encontraron ingredientes en tu despensa.',
+          ),
+          backgroundColor: consumed > 0 ? AppColors.success : AppColors.warning,
+          duration: const Duration(seconds: 4),
         ),
       );
     }

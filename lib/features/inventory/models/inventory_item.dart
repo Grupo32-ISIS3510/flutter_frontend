@@ -1,12 +1,5 @@
 import 'package:second_serving_frontend/shared/models/enums.dart';
 
-int _parseInt(dynamic value) {
-  if (value is int) return value;
-  if (value is double) return value.toInt();
-  if (value is String) return int.parse(value);
-  return 0;
-}
-
 class InventoryItem {
   final String id;
   final String name;
@@ -17,7 +10,6 @@ class InventoryItem {
   final DateTime purchaseDate;
   final DateTime expiryDate;
   final ItemStatus status;
-  final int daysRemaining;
   final String? notes;
   final DateTime createdAt;
 
@@ -31,10 +23,18 @@ class InventoryItem {
     required this.purchaseDate,
     required this.expiryDate,
     required this.status,
-    required this.daysRemaining,
     this.notes,
     required this.createdAt,
   });
+
+  /// Calculado en cliente desde [expiryDate] vs. fecha de hoy (truncadas a día).
+  /// Independiente del campo `days_remaining` que pueda enviar el backend.
+  int get daysRemaining {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final expiry = DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+    return expiry.difference(today).inDays;
+  }
 
   bool get isExpiringSoon => daysRemaining <= 3 && status == ItemStatus.active;
   bool get isExpired => daysRemaining < 0 && status == ItemStatus.active;
@@ -55,7 +55,6 @@ class InventoryItem {
       purchaseDate: DateTime.parse(json['purchase_date'] as String),
       expiryDate: DateTime.parse(json['expiry_date'] as String),
       status: ItemStatus.fromString(json['status'] as String),
-      daysRemaining: _parseInt(json['days_remaining']),
       notes: json['notes'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
@@ -99,7 +98,6 @@ class InventoryItem {
     DateTime? purchaseDate,
     DateTime? expiryDate,
     ItemStatus? status,
-    int? daysRemaining,
     String? notes,
     DateTime? createdAt,
   }) {
@@ -113,7 +111,6 @@ class InventoryItem {
       purchaseDate: purchaseDate ?? this.purchaseDate,
       expiryDate: expiryDate ?? this.expiryDate,
       status: status ?? this.status,
-      daysRemaining: daysRemaining ?? this.daysRemaining,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
     );

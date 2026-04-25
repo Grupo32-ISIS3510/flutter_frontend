@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
+import 'package:second_serving_frontend/core/network/connectivity_provider.dart';
 import 'package:second_serving_frontend/features/analytics/providers/analytics_provider.dart';
 import 'package:second_serving_frontend/features/home/screens/dashboard_screen.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
@@ -79,7 +80,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: Column(
+        children: [
+          Consumer<ConnectivityProvider>(
+            builder: (context, connectivity, _) {
+              if (connectivity.isOnline) return const SizedBox.shrink();
+              return _OfflineBanner(isSyncing: connectivity.isSyncing);
+            },
+          ),
+          Expanded(child: _screens[_currentIndex]),
+        ],
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -205,6 +216,62 @@ class _AddButton extends StatelessWidget {
           ],
         ),
         child: const Icon(Icons.add, color: Colors.white, size: 28),
+      ),
+    );
+  }
+}
+
+/// Banner que se muestra en la parte superior cuando no hay conexión.
+///
+/// Anti-patrones evitados:
+///   - "Pantalla en blanco": los datos locales siguen visibles.
+///   - "App bloqueada": las operaciones se encolan y se sincronizan al reconectar.
+///   - "Spinner infinito": el banner informa el estado real sin bloquear la UI.
+class _OfflineBanner extends StatelessWidget {
+  final bool isSyncing;
+
+  const _OfflineBanner({required this.isSyncing});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSyncing ? Colors.orange.shade700 : Colors.grey.shade800,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Icon(
+                isSyncing ? Icons.sync : Icons.cloud_off,
+                color: Colors.white,
+                size: 18,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isSyncing
+                      ? 'Reconectado — sincronizando cambios...'
+                      : 'Sin conexión — los cambios se guardarán localmente',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (isSyncing)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

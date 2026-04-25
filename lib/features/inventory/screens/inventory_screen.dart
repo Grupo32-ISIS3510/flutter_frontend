@@ -46,53 +46,89 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 await provider.loadItems();
                 await provider.loadExpiringItems();
               },
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  if (provider.expiringItems.isNotEmpty) ...[
-                    _SectionHeader(
-                      title: 'Por vencer pronto',
-                      icon: Icons.warning_amber_rounded,
-                      color: AppColors.expiringSoon,
-                      count: provider.expiringItems.length,
+              child: CustomScrollView(
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    sliver: SliverToBoxAdapter(
+                      child: provider.expiringItems.isNotEmpty
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _SectionHeader(
+                                  title: 'Por vencer pronto',
+                                  icon: Icons.warning_amber_rounded,
+                                  color: AppColors.expiringSoon,
+                                  count: provider.expiringItems.length,
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                            )
+                          : const SizedBox.shrink(),
                     ),
-                    const SizedBox(height: 8),
-                    ...provider.expiringItems.map(
-                      (item) => _InventoryItemCard(item: item),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                  _SectionHeader(
-                    title: 'Todos los productos',
-                    icon: Icons.inventory_2_outlined,
-                    color: AppColors.primary,
-                    count: provider.total,
                   ),
-                  const SizedBox(height: 8),
-                  if (provider.items.isEmpty)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.inbox_outlined,
-                              size: 64,
-                              color: AppColors.textLight,
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'No hay productos en tu inventario',
-                              style: TextStyle(color: AppColors.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    ...provider.items.map(
-                      (item) => _InventoryItemCard(item: item),
+                  // Lista perezosa de items por vencer: solo construye los
+                  // visibles, evitando OOM con inventarios grandes.
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    sliver: SliverList.builder(
+                      itemCount: provider.expiringItems.length,
+                      itemBuilder: (context, i) =>
+                          _InventoryItemCard(item: provider.expiringItems[i]),
                     ),
+                  ),
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      provider.expiringItems.isNotEmpty ? 24 : 16,
+                      16,
+                      0,
+                    ),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _SectionHeader(
+                            title: 'Todos los productos',
+                            icon: Icons.inventory_2_outlined,
+                            color: AppColors.primary,
+                            count: provider.total,
+                          ),
+                          const SizedBox(height: 8),
+                          if (provider.items.isEmpty)
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(32),
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Icons.inbox_outlined,
+                                      size: 64,
+                                      color: AppColors.textLight,
+                                    ),
+                                    SizedBox(height: 16),
+                                    Text(
+                                      'No hay productos en tu inventario',
+                                      style: TextStyle(
+                                          color: AppColors.textSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Lista perezosa principal del inventario.
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    sliver: SliverList.builder(
+                      itemCount: provider.items.length,
+                      itemBuilder: (context, i) =>
+                          _InventoryItemCard(item: provider.items[i]),
+                    ),
+                  ),
                 ],
               ),
             ),

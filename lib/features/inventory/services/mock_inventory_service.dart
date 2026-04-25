@@ -36,9 +36,6 @@ class MockInventoryService implements InventoryService {
       purchaseDate: DateTime.parse(data['purchase_date'] as String),
       expiryDate: DateTime.parse(data['expiry_date'] as String),
       status: ItemStatus.active,
-      daysRemaining: DateTime.parse(data['expiry_date'] as String)
-          .difference(DateTime.now())
-          .inDays,
       notes: data['notes'] as String?,
       createdAt: DateTime.now(),
     );

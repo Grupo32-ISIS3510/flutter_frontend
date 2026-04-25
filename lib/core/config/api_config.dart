@@ -39,7 +39,8 @@ class ApiConfig {
 
   // Notifications
   static const String notificationDevice = '$apiPrefix/notifications/device';
-  static const String notificationPreferences = '$apiPrefix/notifications/preferences';
+  static const String notificationPreferences =
+      '$apiPrefix/notifications/preferences';
 
   // Analytics
   static const String analyticsSavings = '$apiPrefix/analytics/savings';
@@ -51,6 +52,17 @@ class ApiConfig {
       '$apiPrefix/analytics/recipe-impact';
   static const String analyticsBehaviorPatterns =
       '$apiPrefix/analytics/behavior-patterns';
+
+  // Telemetry
+  static const String telemetryScanEvent = '$apiPrefix/telemetry/scan-events';
+  static const String telemetryExpiryAccuracy =
+      '$apiPrefix/telemetry/expiry-accuracy';
+  static const String telemetryExpiryStats =
+      '$apiPrefix/telemetry/expiry-stats';
+  static const String telemetryScreenEvent =
+      '$apiPrefix/telemetry/screen-events';
+  static const String telemetryAbandonmentStats =
+      '$apiPrefix/telemetry/abandonment-stats';
 
   // Sync
   static const String syncPush = '$apiPrefix/sync/push';

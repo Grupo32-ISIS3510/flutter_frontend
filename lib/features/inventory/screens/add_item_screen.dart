@@ -7,6 +7,8 @@ import 'package:second_serving_frontend/shared/models/enums.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/screens/scanned_items_review_screen.dart';
 import 'package:second_serving_frontend/features/inventory/services/receipt_scanner_service.dart';
+import 'package:second_serving_frontend/features/inventory/services/scan_telemetry_service.dart';
+import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
 import 'package:second_serving_frontend/features/notifications/application/local_notifications_service.dart';
 
 class AddItemScreen extends StatefulWidget {
@@ -21,7 +23,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _unitPriceController = TextEditingController();
   final _scannerService = ReceiptScannerService();
+  final _scanTelemetry = ScanTelemetryService();
+  final _screenAnalytics = ScreenAnalyticsService();
+  bool _exitRecorded = false;
   ItemCategory _selectedCategory = ItemCategory.fruits;
   int _quantity = 2;
   String _unit = 'Unidades';
@@ -95,34 +101,65 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _screenAnalytics.recordEnter('add_item');
+  }
+
+  void _recordExitOnce(String reason) {
+    if (_exitRecorded) return;
+    _exitRecorded = true;
+    _screenAnalytics.recordExit('add_item', reason);
+  }
+
+  @override
   void dispose() {
+    _recordExitOnce('back');
     _nameController.dispose();
+    _unitPriceController.dispose();
     super.dispose();
   }
 
   Future<void> _handleCameraScan() async {
     setState(() => _isScanning = true);
+    final stopwatch = Stopwatch()..start();
 
     try {
       final result = await _scannerService.scan();
+      stopwatch.stop();
 
       if (!mounted) return;
       setState(() => _isScanning = false);
 
       if (!result.success) {
-        if (result.errorMessage == 'Captura cancelada') return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.errorMessage ?? 'Error al escanear'),
-            action: SnackBarAction(
-              label: 'Ingreso manual',
-              textColor: Colors.white,
-              onPressed: () {},
+        final isCancelled = result.errorMessage == 'Captura cancelada';
+        if (!isCancelled) {
+          _scanTelemetry.recordScan(
+            success: false,
+            failureReason: result.errorMessage ?? 'unknown',
+            durationMs: stopwatch.elapsedMilliseconds,
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.errorMessage ?? 'Error al escanear'),
+              action: SnackBarAction(
+                label: 'Ingreso manual',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
             ),
-          ),
-        );
+          );
+        }
         return;
       }
+
+      _scanTelemetry.recordScan(
+        success: true,
+        productsDetected: result.products.length,
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
+
+      _recordExitOnce('scan_started');
 
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -133,6 +170,13 @@ class _AddItemScreenState extends State<AddItemScreen> {
         ),
       );
     } catch (e) {
+      stopwatch.stop();
+      _scanTelemetry.recordScan(
+        success: false,
+        failureReason: 'exception: $e',
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
+
       if (!mounted) return;
       setState(() => _isScanning = false);
       ScaffoldMessenger.of(
@@ -236,11 +280,16 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
     setState(() => _isSaving = true);
 
+    final rawPrice = _unitPriceController.text.trim().replaceAll(',', '.');
+    final double? unitPrice =
+        rawPrice.isEmpty ? null : double.tryParse(rawPrice);
+
     final data = {
       'name': sanitizedName,
       'category': _selectedCategory.value,
       'quantity': _quantity,
       'unit': _unit.toLowerCase(),
+      if (unitPrice != null) 'unit_price': unitPrice,
       'purchase_date':
           '${_purchaseDate.year}-${_purchaseDate.month.toString().padLeft(2, '0')}-${_purchaseDate.day.toString().padLeft(2, '0')}',
       'expiry_date':
@@ -248,14 +297,14 @@ class _AddItemScreenState extends State<AddItemScreen> {
       'notes': 'Ubicación: $_location',
     };
 
-    final success = await context.read<InventoryProvider>().addItem(data);
+    final result = await context.read<InventoryProvider>().addItem(data);
     if (!mounted) {
       return;
     }
 
     setState(() => _isSaving = false);
 
-    if (success) {
+    if (result != null) {
       final DateTime today = DateUtils.dateOnly(DateTime.now());
       final int daysRemaining = _expiryDate.difference(today).inDays;
 
@@ -270,19 +319,32 @@ class _AddItemScreenState extends State<AddItemScreen> {
         }
       }
 
+      if (result == 'queued' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Guardado localmente — se sincronizará cuando haya conexión'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
+      _recordExitOnce('completed_manual');
       Navigator.of(context).pop(true);
       return;
     }
 
-    final error = context.read<InventoryProvider>().error;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error ?? 'No se pudo guardar el alimento')),
+      const SnackBar(content: Text('No se pudo guardar el alimento')),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) _recordExitOnce('back');
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
@@ -303,6 +365,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     const SizedBox(height: 20),
                     _buildQuantityAndUnits(),
                     const SizedBox(height: 20),
+                    _buildField(
+                      'Costo unitario (opcional)',
+                      _buildUnitPriceInput(),
+                    ),
+                    const SizedBox(height: 20),
                     _buildField('Fecha compra', _buildPurchaseDatePicker()),
                     const SizedBox(height: 20),
                     _buildField('Fecha vencimiento', _buildExpiryDatePicker()),
@@ -318,6 +385,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -472,6 +540,53 @@ class _AddItemScreenState extends State<AddItemScreen> {
         },
         decoration: InputDecoration(
           hintText: 'Aguacate',
+          hintStyle: TextStyle(
+            color: AppColors.textSecondary.withValues(alpha: 0.6),
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUnitPriceInput() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: TextFormField(
+        controller: _unitPriceController,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          LengthLimitingTextInputFormatter(12),
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+        ],
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return null; // opcional
+          }
+          final parsed = double.tryParse(value.trim().replaceAll(',', '.'));
+          if (parsed == null) {
+            return 'Ingresa un número válido';
+          }
+          if (parsed < 0) {
+            return 'No puede ser negativo';
+          }
+          return null;
+        },
+        decoration: InputDecoration(
+          hintText: 'Ej: 2500',
+          prefixText: '\$ ',
           hintStyle: TextStyle(
             color: AppColors.textSecondary.withValues(alpha: 0.6),
           ),
