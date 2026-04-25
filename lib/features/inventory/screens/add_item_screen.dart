@@ -23,6 +23,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _unitPriceController = TextEditingController();
   final _scannerService = ReceiptScannerService();
   final _scanTelemetry = ScanTelemetryService();
   final _screenAnalytics = ScreenAnalyticsService();
@@ -115,6 +116,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   void dispose() {
     _recordExitOnce('back');
     _nameController.dispose();
+    _unitPriceController.dispose();
     super.dispose();
   }
 
@@ -278,11 +280,16 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
     setState(() => _isSaving = true);
 
+    final rawPrice = _unitPriceController.text.trim().replaceAll(',', '.');
+    final double? unitPrice =
+        rawPrice.isEmpty ? null : double.tryParse(rawPrice);
+
     final data = {
       'name': sanitizedName,
       'category': _selectedCategory.value,
       'quantity': _quantity,
       'unit': _unit.toLowerCase(),
+      if (unitPrice != null) 'unit_price': unitPrice,
       'purchase_date':
           '${_purchaseDate.year}-${_purchaseDate.month.toString().padLeft(2, '0')}-${_purchaseDate.day.toString().padLeft(2, '0')}',
       'expiry_date':
@@ -357,6 +364,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     _buildField('Categoría', _buildCategoryDropdown()),
                     const SizedBox(height: 20),
                     _buildQuantityAndUnits(),
+                    const SizedBox(height: 20),
+                    _buildField(
+                      'Costo unitario (opcional)',
+                      _buildUnitPriceInput(),
+                    ),
                     const SizedBox(height: 20),
                     _buildField('Fecha compra', _buildPurchaseDatePicker()),
                     const SizedBox(height: 20),
@@ -528,6 +540,53 @@ class _AddItemScreenState extends State<AddItemScreen> {
         },
         decoration: InputDecoration(
           hintText: 'Aguacate',
+          hintStyle: TextStyle(
+            color: AppColors.textSecondary.withValues(alpha: 0.6),
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUnitPriceInput() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: TextFormField(
+        controller: _unitPriceController,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          LengthLimitingTextInputFormatter(12),
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+        ],
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return null; // opcional
+          }
+          final parsed = double.tryParse(value.trim().replaceAll(',', '.'));
+          if (parsed == null) {
+            return 'Ingresa un número válido';
+          }
+          if (parsed < 0) {
+            return 'No puede ser negativo';
+          }
+          return null;
+        },
+        decoration: InputDecoration(
+          hintText: 'Ej: 2500',
+          prefixText: '\$ ',
           hintStyle: TextStyle(
             color: AppColors.textSecondary.withValues(alpha: 0.6),
           ),

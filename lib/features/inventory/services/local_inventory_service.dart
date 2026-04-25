@@ -134,9 +134,7 @@ class LocalInventoryService {
   // ── MAPPERS ───────────────────────────────────────────────
 
   InventoryItem _rowToItem(Map<String, dynamic> row) {
-    final now = DateTime.now();
     final expiry = DateTime.parse(row['expiry_date'] as String);
-    final daysRemaining = expiry.difference(now).inDays;
 
     return InventoryItem(
       id: row['id'] as String,
@@ -148,7 +146,6 @@ class LocalInventoryService {
       purchaseDate: DateTime.parse(row['purchase_date'] as String),
       expiryDate: expiry,
       status: _parseStatus(row['status'] as String),
-      daysRemaining: daysRemaining,
       notes: row['notes'] as String?,
       createdAt: DateTime.parse(row['created_at'] as String),
     );

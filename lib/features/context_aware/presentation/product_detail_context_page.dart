@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:second_serving_frontend/features/analytics/providers/analytics_provider.dart';
 import 'package:second_serving_frontend/features/inventory/models/inventory_item.dart';
+import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../application/context_aware_service.dart';
@@ -43,6 +48,39 @@ class _ProductDetailContextPageState extends State<ProductDetailContextPage> {
       usingFallback: true,
     );
     _loadContext();
+  }
+
+  Future<void> _handleConsume() async {
+    final item = widget.item;
+    if (item == null) return;
+
+    final inventory = context.read<InventoryProvider>();
+    final analytics = context.read<AnalyticsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final ok = await inventory.consumeItem(item.id);
+    if (!mounted) return;
+
+    if (!ok) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            inventory.error ?? 'No se pudo marcar como consumido',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Refresco inmediato del panel "ahorrado este mes" (cinturón + tirantes
+    // junto al callback en InventoryProvider).
+    unawaited(analytics.loadMonthlySavings());
+
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Item marcado como consumido')),
+    );
+    navigator.pop(true);
   }
 
   Future<void> _loadContext() async {
@@ -101,7 +139,7 @@ class _ProductDetailContextPageState extends State<ProductDetailContextPage> {
               _SecondaryButton(
                 text: 'Marcar como consumido',
                 icon: Icons.check_circle,
-                onTap: () {},
+                onTap: _handleConsume,
               ),
               const SizedBox(height: 20),
             ],

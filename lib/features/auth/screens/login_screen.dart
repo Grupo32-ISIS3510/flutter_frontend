@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
@@ -228,6 +229,7 @@ class _LoginScreenState extends State<LoginScreen>
           label: 'Email address',
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
+          maxLength: 60,
         ),
         const SizedBox(height: 24),
         _buildUnderlineField(
@@ -292,12 +294,14 @@ class _LoginScreenState extends State<LoginScreen>
         _buildUnderlineField(
           label: 'Full name',
           controller: _regNameController,
+          maxLength: 60,
         ),
         const SizedBox(height: 24),
         _buildUnderlineField(
           label: 'Email address',
           controller: _regEmailController,
           keyboardType: TextInputType.emailAddress,
+          maxLength: 60,
         ),
         const SizedBox(height: 24),
         _buildUnderlineField(
@@ -343,11 +347,16 @@ class _LoginScreenState extends State<LoginScreen>
     required TextEditingController controller,
     TextInputType keyboardType = TextInputType.text,
     bool obscure = false,
+    int? maxLength,
   }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscure,
+      maxLength: maxLength,
+      inputFormatters: maxLength != null
+          ? [LengthLimitingTextInputFormatter(maxLength)]
+          : null,
       style: const TextStyle(fontSize: 16),
       decoration: InputDecoration(
         labelText: label,
@@ -355,6 +364,9 @@ class _LoginScreenState extends State<LoginScreen>
           color: AppColors.textSecondary,
           fontSize: 14,
         ),
+        // Suprime el contador "x/60" para mantener el diseño minimalista
+        // del input con underline.
+        counterText: '',
         filled: false,
         border: const UnderlineInputBorder(),
         enabledBorder: UnderlineInputBorder(

@@ -1,30 +1,42 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:second_serving_frontend/features/inventory/models/inventory_item.dart';
+import 'package:second_serving_frontend/features/inventory/services/cached_inventory_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/inventory_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/local_inventory_service.dart';
 
 /// ViewModel del inventario.
 ///
 /// Estrategia de almacenamiento local: "Cache then network"
-///   1. loadItems() primero lee del SQLite local (respuesta inmediata a la UI)
-///   2. Luego intenta obtener datos frescos del backend
-///   3. Si el backend responde, actualiza SQLite y la UI
-///   4. Si el backend falla, la UI sigue mostrando datos locales (no queda en blanco)
-///
-/// Al crear items, se guardan en SQLite inmediatamente.
-/// Si el backend falla, se encolan en pending_operations para sync posterior.
+///   - Las lecturas se delegan a [CachedInventoryService] que implementa
+///     stale-while-revalidate: intenta el remoto, si falla sirve la cache.
+///   - Las escrituras se delegan al servicio. Si el backend falla,
+///     se encolan en pending_operations (SQLite) para sync posterior.
 class InventoryProvider extends ChangeNotifier {
   final InventoryService _service;
   final LocalInventoryService _local = LocalInventoryService();
+  final Future<void> Function()? _onInventoryMutated;
 
   List<InventoryItem> _items = [];
   List<InventoryItem> _expiringItems = [];
   int _total = 0;
   bool _isLoading = false;
   String? _error;
+  bool _isStale = false;
 
-  InventoryProvider(this._service);
+  InventoryProvider(
+    this._service, {
+    Future<void> Function()? onInventoryMutated,
+  }) : _onInventoryMutated = onInventoryMutated;
+
+  void _fireMutationHook() {
+    final hook = _onInventoryMutated;
+    if (hook != null) {
+      unawaited(hook());
+    }
+  }
 
   List<InventoryItem> get items => _items;
   List<InventoryItem> get expiringItems => _expiringItems;
@@ -32,39 +44,26 @@ class InventoryProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  /// Estrategia "Cache then network":
-  /// Muestra datos locales al instante, luego refresca desde el backend.
+  /// `true` cuando el último read del backend falló y los datos visibles
+  /// vienen de la cache local (puede que estén desactualizados).
+  bool get isStale => _isStale;
+
   Future<void> loadItems({int skip = 0, int limit = 20}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
-    // 1) Leer del SQLite local (instantáneo)
-    try {
-      final localItems = await _local.getAllItems(skip: skip, limit: limit);
-      final localCount = await _local.getItemCount();
-      if (localItems.isNotEmpty) {
-        _items = localItems;
-        _total = localCount;
-        _isLoading = false;
-        notifyListeners();
-      }
-    } catch (e) {
-      debugPrint('[InventoryProvider] Local read failed: $e');
-    }
-
-    // 2) Intentar red → actualizar SQLite y UI
     try {
       final response = await _service.getItems(skip: skip, limit: limit);
       _items = response.items;
       _total = response.total;
-
-      await _local.upsertAll(response.items);
-    } catch (e) {
-      if (_items.isEmpty) {
-        _error = e.toString();
+      _updateStaleFlag();
+      if (_isStale && _items.isEmpty) {
+        _error = 'Sin conexión y sin datos cacheados';
       }
-      debugPrint('[InventoryProvider] Network load failed (using local): $e');
+    } catch (e) {
+      _error = e.toString();
+      _isStale = true;
     }
 
     _isLoading = false;
@@ -72,29 +71,27 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   Future<void> loadExpiringItems({int days = 3}) async {
-    // 1) Local primero
-    try {
-      final localExpiring = await _local.getExpiringItems(days: days);
-      if (localExpiring.isNotEmpty) {
-        _expiringItems = localExpiring;
-        notifyListeners();
-      }
-    } catch (e) {
-      debugPrint('[InventoryProvider] Local expiring read failed: $e');
-    }
-
-    // 2) Red después
     try {
       _expiringItems = await _service.getExpiringItems(days: days);
-      debugPrint('[InventoryProvider] expiringItems loaded: ${_expiringItems.length}');
+      _updateStaleFlag();
+      debugPrint(
+          '[InventoryProvider] expiringItems loaded: ${_expiringItems.length}');
       notifyListeners();
     } catch (e, st) {
+      _isStale = true;
       if (_expiringItems.isEmpty) {
         _error = e.toString();
       }
-      debugPrint('[InventoryProvider] loadExpiringItems network error: $e');
+      debugPrint('[InventoryProvider] loadExpiringItems error: $e');
       debugPrint('[InventoryProvider] stackTrace: $st');
       notifyListeners();
+    }
+  }
+
+  void _updateStaleFlag() {
+    final svc = _service;
+    if (svc is CachedInventoryService) {
+      _isStale = svc.lastReadFromCache;
     }
   }
 
@@ -109,20 +106,17 @@ class InventoryProvider extends ChangeNotifier {
       final item = await _service.createItem(data);
       _items.insert(0, item);
       _total++;
-
-      await _local.upsertItem(item);
-
       _isLoading = false;
       notifyListeners();
+      _fireMutationHook();
       return 'synced';
     } catch (e) {
-      debugPrint('[InventoryProvider] Backend addItem failed, queuing locally: $e');
-
+      debugPrint(
+          '[InventoryProvider] Backend addItem failed, queuing locally: $e');
       await _local.enqueuePendingOperation(
         operation: 'create',
         payload: data,
       );
-
       _isLoading = false;
       notifyListeners();
       return 'queued';
@@ -134,10 +128,8 @@ class InventoryProvider extends ChangeNotifier {
       final updated = await _service.updateItem(id, data);
       final idx = _items.indexWhere((i) => i.id == id);
       if (idx != -1) _items[idx] = updated;
-
-      await _local.upsertItem(updated);
-
       notifyListeners();
+      _fireMutationHook();
       return true;
     } catch (e) {
       await _local.enqueuePendingOperation(
@@ -156,10 +148,8 @@ class InventoryProvider extends ChangeNotifier {
       await _service.consumeItem(id);
       _items.removeWhere((i) => i.id == id);
       _total--;
-
-      await _local.deleteItem(id);
-
       notifyListeners();
+      _fireMutationHook();
       return true;
     } catch (e) {
       await _local.enqueuePendingOperation(
@@ -181,13 +171,12 @@ class InventoryProvider extends ChangeNotifier {
       if (updated.status.value == 'discarded') {
         _items.removeWhere((i) => i.id == id);
         _total--;
-        await _local.deleteItem(id);
       } else {
         final idx = _items.indexWhere((i) => i.id == id);
         if (idx != -1) _items[idx] = updated;
-        await _local.upsertItem(updated);
       }
       notifyListeners();
+      _fireMutationHook();
       return true;
     } catch (e) {
       await _local.enqueuePendingOperation(
@@ -206,10 +195,8 @@ class InventoryProvider extends ChangeNotifier {
       await _service.deleteItem(id);
       _items.removeWhere((i) => i.id == id);
       _total--;
-
-      await _local.deleteItem(id);
-
       notifyListeners();
+      _fireMutationHook();
       return true;
     } catch (e) {
       await _local.enqueuePendingOperation(
@@ -228,7 +215,8 @@ class InventoryProvider extends ChangeNotifier {
     final pending = await _local.getPendingOperations();
     if (pending.isEmpty) return;
 
-    debugPrint('[InventoryProvider] Syncing ${pending.length} pending operations...');
+    debugPrint(
+        '[InventoryProvider] Syncing ${pending.length} pending operations...');
     for (final op in pending) {
       try {
         final operation = op['operation'] as String;

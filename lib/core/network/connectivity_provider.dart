@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:second_serving_frontend/core/network/connectivity_service.dart';
+import 'package:second_serving_frontend/core/connectivity/connectivity_service.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/services/expiry_telemetry_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
@@ -16,7 +16,7 @@ import 'package:second_serving_frontend/features/inventory/services/scan_telemet
 ///     3. recarga del inventario para obtener datos frescos
 ///   - Expone [isOnline] para que la UI muestre un banner offline.
 class ConnectivityProvider extends ChangeNotifier {
-  final ConnectivityService _service = ConnectivityService.instance;
+  final ConnectivityService _service;
   final InventoryProvider _inventoryProvider;
   final ExpiryTelemetryService _expiryTelemetry;
   final ScreenAnalyticsService _screenAnalytics;
@@ -30,16 +30,18 @@ class ConnectivityProvider extends ChangeNotifier {
   bool get isSyncing => _isSyncing;
 
   ConnectivityProvider({
+    required ConnectivityService connectivityService,
     required InventoryProvider inventoryProvider,
     required ExpiryTelemetryService expiryTelemetry,
     required ScreenAnalyticsService screenAnalytics,
     required ScanTelemetryService scanTelemetry,
-  })  : _inventoryProvider = inventoryProvider,
+  })  : _service = connectivityService,
+        _inventoryProvider = inventoryProvider,
         _expiryTelemetry = expiryTelemetry,
         _screenAnalytics = screenAnalytics,
         _scanTelemetry = scanTelemetry {
     _isOnline = _service.isOnline;
-    _subscription = _service.onConnectivityChanged.listen(_onChanged);
+    _subscription = _service.onStatusChange.listen(_onChanged);
   }
 
   void _onChanged(bool online) {
