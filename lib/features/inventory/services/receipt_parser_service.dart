@@ -1,27 +1,25 @@
 import 'package:second_serving_frontend/shared/models/enums.dart';
 import 'package:second_serving_frontend/features/inventory/services/receipt_scanner_service.dart';
+import 'package:second_serving_frontend/features/inventory/services/shelf_life_estimator.dart';
 
 /// Subsistema C del patrón Facade.
 /// Transforma texto crudo de un recibo en una lista estructurada de
 /// productos. Aplica filtrado de ruido, extracción de precio/cantidad
 /// mediante regex, y clasificación automática por categoría.
-/// También intenta detectar fechas de vencimiento del texto OCR.
+/// Estima la fecha de vencimiento de cada producto basándose en su
+/// categoría y la fecha de compra detectada en el recibo.
 class ReceiptParserService {
-  static final List<RegExp> _expiryPatterns = [
+  static final List<RegExp> _datePatterns = [
     RegExp(
-      r'(?:ven(?:ce|cimiento)?|exp(?:iry|ira)?|fv|f\.?\s*v|caduc(?:a|idad)?|best\s*before)\s*[:\-]?\s*(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})',
+      r'(?:fecha|date)\s*[:\-]?\s*(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})',
       caseSensitive: false,
     ),
-    RegExp(
-      r'(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})',
-    ),
-    RegExp(
-      r'(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})',
-    ),
+    RegExp(r'(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})'),
+    RegExp(r'(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})'),
   ];
 
   List<ScannedProduct> parse(String rawText) {
-    final expiryDate = extractExpiryDate(rawText);
+    final purchaseDate = _extractPurchaseDate(rawText) ?? DateTime.now();
 
     final lines =
         rawText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
@@ -31,10 +29,11 @@ class ReceiptParserService {
       if (_isNoiseLine(line)) continue;
       final product = _parseLine(line);
       if (product != null) {
-        if (expiryDate != null) {
-          product.expiryDate = expiryDate;
-          product.expiryDateFromOcr = true;
-        }
+        product.expiryDate = ShelfLifeEstimator.estimateExpiryDate(
+          product.category,
+          purchaseDate: purchaseDate,
+        );
+        product.expiryDateFromOcr = false;
         products.add(product);
       }
     }
@@ -42,10 +41,10 @@ class ReceiptParserService {
     return products;
   }
 
-  /// Busca fechas de vencimiento en el texto OCR completo.
-  /// Retorna la primera fecha futura válida encontrada, o null.
-  DateTime? extractExpiryDate(String rawText) {
-    for (final pattern in _expiryPatterns) {
+  /// Busca la fecha de compra/transacción en el recibo.
+  /// Los recibos contienen fechas de transacción, no de vencimiento.
+  DateTime? _extractPurchaseDate(String rawText) {
+    for (final pattern in _datePatterns) {
       for (final match in pattern.allMatches(rawText)) {
         final date = _parseMatchToDate(match, pattern);
         if (date != null) return date;
@@ -58,7 +57,7 @@ class ReceiptParserService {
     try {
       int day, month, year;
 
-      if (pattern == _expiryPatterns.last) {
+      if (pattern == _datePatterns.last) {
         year = int.parse(match.group(1)!);
         month = int.parse(match.group(2)!);
         day = int.parse(match.group(3)!);
@@ -83,7 +82,8 @@ class ReceiptParserService {
 
       final date = DateTime(year, month, day);
       final now = DateTime.now();
-      if (date.isBefore(now.subtract(const Duration(days: 30)))) return null;
+      if (date.isAfter(now.add(const Duration(days: 1)))) return null;
+      if (date.isBefore(now.subtract(const Duration(days: 90)))) return null;
 
       return date;
     } catch (_) {
@@ -119,14 +119,25 @@ class ReceiptParserService {
     double? price;
     String cleanLine = line;
 
-    final priceMatch = RegExp(r'\$?\s*([\d.,]+)\s*$').firstMatch(line);
-    if (priceMatch != null) {
-      final priceStr =
-          priceMatch.group(1)!.replaceAll('.', '').replaceAll(',', '.');
-      final parsed = double.tryParse(priceStr);
-      if (parsed != null && parsed >= 100) {
-        price = parsed;
-        cleanLine = line.substring(0, priceMatch.start).trim();
+    // Patron 1: precio al final con posible indicador de impuesto (I, T, E, G)
+    // Ej: "LECHE ENTERA   4.500 I", "Arroz $3,200 T", "Pan 2.300"
+    final pricePatterns = [
+      RegExp(r'\$\s*([\d.,]+)\s*[A-Za-z]?\s*$'),
+      RegExp(r'([\d]{1,3}(?:[.,]\d{3})+)\s*[A-Za-z]?\s*$'),
+      RegExp(r'([\d.,]+)\s*[A-Za-z]?\s*$'),
+    ];
+
+    for (final pattern in pricePatterns) {
+      final priceMatch = pattern.firstMatch(line);
+      if (priceMatch != null) {
+        final priceStr =
+            priceMatch.group(1)!.replaceAll('.', '').replaceAll(',', '.');
+        final parsed = double.tryParse(priceStr);
+        if (parsed != null && parsed >= 50) {
+          price = parsed;
+          cleanLine = line.substring(0, priceMatch.start).trim();
+          break;
+        }
       }
     }
 
