@@ -446,7 +446,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         keyboardType: TextInputType.text,
         textCapitalization: TextCapitalization.words,
         inputFormatters: [
-          LengthLimitingTextInputFormatter(60),
+          LengthLimitingTextInputFormatter(25),
           FilteringTextInputFormatter.allow(_allowedNameChars),
         ],
         onChanged: (value) {
