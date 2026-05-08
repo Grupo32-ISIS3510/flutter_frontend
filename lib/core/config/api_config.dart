@@ -11,7 +11,7 @@ class ApiConfig {
 
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.1.10:8000',
+    defaultValue: 'http://3.16.198.192',
   );
   static const String apiPrefix = '/api/v1';
 
