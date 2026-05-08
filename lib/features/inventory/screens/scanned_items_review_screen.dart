@@ -79,6 +79,9 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
     setState(() => _isSaving = true);
 
     final inventory = context.read<InventoryProvider>();
+    final recipes = context.read<RecipeProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
     int syncedCount = 0;
     int queuedCount = 0;
     final now = DateTime.now();
@@ -115,9 +118,9 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
     if (mounted) {
       await inventory.loadItems();
       await inventory.loadExpiringItems(days: 30);
-      if (mounted) {
-        context.read<RecipeProvider>().loadSuggestions();
-      }
+      if (!mounted) return;
+
+      recipes.loadSuggestions();
       setState(() => _isSaving = false);
 
       final total = syncedCount + queuedCount;
@@ -125,21 +128,24 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
       final Color bgColor;
 
       if (queuedCount == 0) {
-        message = '$total producto${total == 1 ? '' : 's'} agregado${total == 1 ? '' : 's'}';
+        message =
+            '$total producto${total == 1 ? '' : 's'} agregado${total == 1 ? '' : 's'}';
         bgColor = AppColors.success;
       } else if (syncedCount == 0) {
-        message = '$total producto${total == 1 ? '' : 's'} guardado${total == 1 ? '' : 's'} localmente — se sincronizará${total == 1 ? '' : 'n'} con conexión';
+        message =
+            '$total producto${total == 1 ? '' : 's'} guardado${total == 1 ? '' : 's'} localmente — se sincronizará${total == 1 ? '' : 'n'} con conexión';
         bgColor = Colors.orange;
       } else {
-        message = '$syncedCount sincronizado${syncedCount == 1 ? '' : 's'}, $queuedCount pendiente${queuedCount == 1 ? '' : 's'} de sincronizar';
+        message =
+            '$syncedCount sincronizado${syncedCount == 1 ? '' : 's'}, $queuedCount pendiente${queuedCount == 1 ? '' : 's'} de sincronizar';
         bgColor = Colors.orange;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text(message), backgroundColor: bgColor),
       );
       _recordExitOnce('completed');
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      navigator.popUntil((route) => route.isFirst);
     }
   }
 
@@ -175,13 +181,18 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
               _buildSummaryBar(),
               Expanded(
                 child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   itemCount: _products.length,
                   itemBuilder: (context, i) => _ProductCard(
                     product: _products[i],
                     formatDate: _formatDate,
                     onToggle: () {
-                      setState(() => _products[i].selected = !_products[i].selected);
+                      setState(
+                        () => _products[i].selected = !_products[i].selected,
+                      );
                     },
                     onEdit: () => _editProduct(i),
                     onDelete: () {
@@ -212,7 +223,11 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
                 color: AppColors.textLight.withValues(alpha: 0.3),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.arrow_back, size: 20, color: AppColors.textPrimary),
+              child: const Icon(
+                Icons.arrow_back,
+                size: 20,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -228,7 +243,10 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
           ),
           if (widget.rawText != null)
             IconButton(
-              icon: const Icon(Icons.article_outlined, color: AppColors.textSecondary),
+              icon: const Icon(
+                Icons.article_outlined,
+                color: AppColors.textSecondary,
+              ),
               onPressed: () => _showRawText(),
               tooltip: 'Ver texto detectado',
             ),
@@ -307,16 +325,23 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
                 borderRadius: BorderRadius.circular(27),
               ),
               elevation: 0,
-              textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              textStyle: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             child: _isSaving
                 ? const SizedBox(
                     width: 22,
                     height: 22,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2.5, color: Colors.white),
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
                   )
-                : Text('Guardar $_selectedCount producto${_selectedCount == 1 ? '' : 's'} en despensa'),
+                : Text(
+                    'Guardar $_selectedCount producto${_selectedCount == 1 ? '' : 's'} en despensa',
+                  ),
           ),
         ),
       ),
@@ -458,7 +483,11 @@ class _ProductCard extends StatelessWidget {
                 const SizedBox(width: 4),
                 GestureDetector(
                   onTap: onDelete,
-                  child: const Icon(Icons.close, size: 18, color: AppColors.textLight),
+                  child: const Icon(
+                    Icons.close,
+                    size: 18,
+                    color: AppColors.textLight,
+                  ),
                 ),
               ],
             ),
@@ -495,11 +524,13 @@ class _EditProductSheetState extends State<_EditProductSheet> {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.product.name);
     _qtyCtrl = TextEditingController(
-        text: widget.product.quantity % 1 == 0
-            ? widget.product.quantity.toInt().toString()
-            : widget.product.quantity.toString());
+      text: widget.product.quantity % 1 == 0
+          ? widget.product.quantity.toInt().toString()
+          : widget.product.quantity.toString(),
+    );
     _priceCtrl = TextEditingController(
-        text: widget.product.price?.toStringAsFixed(0) ?? '');
+      text: widget.product.price?.toStringAsFixed(0) ?? '',
+    );
     _category = widget.product.category;
     _unit = widget.product.unit;
     if (!_units.contains(_unit)) _unit = 'unidades';
@@ -525,9 +556,9 @@ class _EditProductSheetState extends State<_EditProductSheet> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-                  primary: AppColors.primary,
-                ),
+            colorScheme: Theme.of(
+              context,
+            ).colorScheme.copyWith(primary: AppColors.primary),
           ),
           child: child!,
         );
@@ -624,8 +655,12 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                   initialValue: _category,
                   decoration: const InputDecoration(labelText: 'Categoría'),
                   items: ItemCategory.values
-                      .map((c) => DropdownMenuItem(
-                          value: c, child: Text('${c.emoji} ${c.label}')))
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: c,
+                          child: Text('${c.emoji} ${c.label}'),
+                        ),
+                      )
                       .toList(),
                   onChanged: (v) {
                     if (v != null) setState(() => _category = v);

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
 import 'package:second_serving_frontend/core/config/format_helpers.dart';
+import 'package:second_serving_frontend/features/analytics/models/analytics.dart';
 import 'package:second_serving_frontend/features/analytics/providers/analytics_provider.dart';
+import 'package:second_serving_frontend/shared/models/enums.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -19,6 +21,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       if (!mounted) return;
       context.read<AnalyticsProvider>().loadDashboard();
       context.read<AnalyticsProvider>().loadWasteTrends();
+      context.read<AnalyticsProvider>().loadRecipeImpact();
+      context.read<AnalyticsProvider>().loadBehaviorPatterns();
     });
   }
 
@@ -34,6 +38,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               onRefresh: () async {
                 await provider.loadDashboard();
                 await provider.loadWasteTrends();
+                await provider.loadRecipeImpact();
+                await provider.loadBehaviorPatterns();
               },
               child: ListView(
                 padding: const EdgeInsets.all(16),
@@ -55,6 +61,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ),
                     const SizedBox(height: 16),
                   ],
+                  if (provider.recipeImpact != null) ...[
+                    _RecipeImpactCard(impact: provider.recipeImpact!),
+                    const SizedBox(height: 16),
+                  ],
+                  if (provider.behaviorPatterns != null) ...[
+                    _BehaviorPatternsCard(patterns: provider.behaviorPatterns!),
+                    const SizedBox(height: 16),
+                  ],
                   if (provider.segment != null)
                     _SegmentCard(
                       segment: provider.segment!.segment,
@@ -63,6 +77,323 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _RecipeImpactCard extends StatelessWidget {
+  final RecipeImpactResponse impact;
+
+  const _RecipeImpactCard({required this.impact});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = impact.impacts;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Impacto de recetas por categoría',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${impact.totalWasteReductionPercentage.toStringAsFixed(0)}% menos desperdicio estimado',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (items.isEmpty)
+              const Text(
+                'Aún no hay suficientes recetas recomendadas para calcular este indicador.',
+                style: TextStyle(color: AppColors.textSecondary),
+              )
+            else
+              ...items.map((item) => _RecipeImpactRow(item: item)),
+            const Divider(height: 24),
+            _SummaryRow(
+              icon: Icons.payments_outlined,
+              color: AppColors.success,
+              label: 'Valor salvado estimado',
+              value: FormatHelpers.currency(impact.totalValueSavedCop),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecipeImpactRow extends StatelessWidget {
+  final RecipeRecommendationImpact item;
+
+  const _RecipeImpactRow({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final category = RecipeCategory.fromString(item.recipeCategory);
+    final progress = (item.wasteReductionPercentage / 100).clamp(0.0, 1.0);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${category.emoji} ${category.label}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              Text(
+                '${item.wasteReductionPercentage.toStringAsFixed(0)}%',
+                style: const TextStyle(
+                  color: AppColors.success,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: AppColors.textLight.withValues(alpha: 0.2),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.success,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${item.itemsConsumed} consumidos de ${item.totalRecommended} recomendaciones',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BehaviorPatternsCard extends StatelessWidget {
+  final BehaviorPatternsResponse patterns;
+
+  const _BehaviorPatternsCard({required this.patterns});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = patterns.metrics;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Pasivos vs proactivos',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            if (patterns.summary.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                patterns.summary,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            if (items.isEmpty)
+              const Text(
+                'Aún no hay suficientes datos para comparar los segmentos.',
+                style: TextStyle(color: AppColors.textSecondary),
+              )
+            else ...[
+              const _BehaviorLegend(),
+              const SizedBox(height: 12),
+              ...items.map((item) => _BehaviorPatternRow(item: item)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BehaviorLegend extends StatelessWidget {
+  const _BehaviorLegend();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        _LegendItem(color: AppColors.error, label: 'Pasivos'),
+        SizedBox(width: 16),
+        _LegendItem(color: AppColors.success, label: 'Proactivos'),
+      ],
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendItem({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
+class _BehaviorPatternRow extends StatelessWidget {
+  final BehaviorPatternMetric item;
+
+  const _BehaviorPatternRow({required this.item});
+
+  String _formatValue(double value) {
+    final displayValue = value % 1 == 0
+        ? value.toStringAsFixed(0)
+        : value.toStringAsFixed(1);
+    if (item.unit == '%') return '$displayValue%';
+    return item.unit.isEmpty ? displayValue : '$displayValue ${item.unit}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxValue = [
+      item.passiveValue,
+      item.proactiveValue,
+      1.0,
+    ].reduce((a, b) => a > b ? a : b);
+    final passiveProgress = (item.passiveValue / maxValue).clamp(0.0, 1.0);
+    final proactiveProgress = (item.proactiveValue / maxValue).clamp(0.0, 1.0);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.metric,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          _ComparisonBar(
+            label: 'Pasivos',
+            value: _formatValue(item.passiveValue),
+            progress: passiveProgress,
+            color: AppColors.error,
+          ),
+          const SizedBox(height: 6),
+          _ComparisonBar(
+            label: 'Proactivos',
+            value: _formatValue(item.proactiveValue),
+            progress: proactiveProgress,
+            color: AppColors.success,
+          ),
+          if (item.insight.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              item.insight,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ComparisonBar extends StatelessWidget {
+  final String label;
+  final String value;
+  final double progress;
+  final Color color;
+
+  const _ComparisonBar({
+    required this.label,
+    required this.value,
+    required this.progress,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 78,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: AppColors.textLight.withValues(alpha: 0.2),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 82,
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
