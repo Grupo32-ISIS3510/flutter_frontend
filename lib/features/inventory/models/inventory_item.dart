@@ -27,8 +27,10 @@ class InventoryItem {
     required this.createdAt,
   });
 
-  /// Calculado en cliente desde [expiryDate] vs. fecha de hoy (truncadas a día).
-  /// Independiente del campo `days_remaining` que pueda enviar el backend.
+  // Días restantes calculados con la fecha del teléfono.
+  // Why: el backend puede devolver un `days_remaining` desfasado por zona
+  // horaria o por estar calculado en otro instante; la única fuente de
+  // verdad es `expiryDate` y la fecha local del dispositivo.
   int get daysRemaining {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
