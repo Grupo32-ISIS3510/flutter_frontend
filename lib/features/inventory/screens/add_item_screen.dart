@@ -4,48 +4,44 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
 import 'package:second_serving_frontend/shared/models/enums.dart';
+import 'package:second_serving_frontend/features/inventory/providers/add_item_provider.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/screens/scanned_items_review_screen.dart';
 import 'package:second_serving_frontend/features/inventory/services/receipt_scanner_service.dart';
 import 'package:second_serving_frontend/features/notifications/application/local_notifications_service.dart';
 
-class AddItemScreen extends StatefulWidget {
+class AddItemScreen extends StatelessWidget {
   const AddItemScreen({super.key});
 
   @override
-  State<AddItemScreen> createState() => _AddItemScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider<AddItemProvider>(
+      create: (_) => AddItemProvider(),
+      child: const _AddItemView(),
+    );
+  }
 }
 
-class _AddItemScreenState extends State<AddItemScreen> {
-  static final RegExp _allowedNameChars = RegExp(r"[a-zA-ZÀ-ÿ0-9'.,()/\-\s]");
+class _AddItemView extends StatefulWidget {
+  const _AddItemView();
+
+  @override
+  State<_AddItemView> createState() => _AddItemViewState();
+}
+
+class _AddItemViewState extends State<_AddItemView> {
+  static final RegExp _allowedNameChars =
+      RegExp(r"[a-zA-ZÀ-ÿ0-9'.,()/\-\s]");
 
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _scannerService = ReceiptScannerService();
-  ItemCategory _selectedCategory = ItemCategory.fruits;
-  int _quantity = 2;
-  String _unit = 'Unidades';
-  DateTime _purchaseDate = DateUtils.dateOnly(DateTime.now());
-  DateTime _expiryDate = DateUtils.dateOnly(
-    DateTime.now().add(const Duration(days: 7)),
-  );
-  String _location = 'Nevera';
   bool _isScanning = false;
-  bool _isSaving = false;
 
-  final _units = ['Unidades', 'Kg', 'Litros', 'Gramos', 'Paquetes'];
-  final _locations = ['Nevera', 'Congelador', 'Despensa'];
-
-  String _normalizeWhitespaces(String input) {
-    return input.replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
-
-  String _sanitizeName(String input) {
-    final normalized = _normalizeWhitespaces(input);
-    return normalized
-        .split('')
-        .where((char) => _allowedNameChars.hasMatch(char))
-        .join();
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   DateTime _clampDate({
@@ -53,12 +49,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
     required DateTime min,
     required DateTime max,
   }) {
-    if (value.isBefore(min)) {
-      return min;
-    }
-    if (value.isAfter(max)) {
-      return max;
-    }
+    if (value.isBefore(min)) return min;
+    if (value.isAfter(max)) return max;
     return value;
   }
 
@@ -92,12 +84,6 @@ class _AddItemScreenState extends State<AddItemScreen> {
     } catch (_) {
       return openPicker();
     }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
   }
 
   Future<void> _handleCameraScan() async {
@@ -141,15 +127,38 @@ class _AddItemScreenState extends State<AddItemScreen> {
     }
   }
 
-  Future<void> _pickExpiryDate() async {
+  Future<void> _pickPurchaseDate() async {
+    final addProvider = context.read<AddItemProvider>();
     final firstDate = DateUtils.dateOnly(
-      _purchaseDate,
+      DateTime.now().subtract(const Duration(days: 365 * 3)),
+    );
+    final lastDate = DateUtils.dateOnly(DateTime.now());
+    final initialDate = _clampDate(
+      value: DateUtils.dateOnly(addProvider.purchaseDate),
+      min: firstDate,
+      max: lastDate,
+    );
+
+    final picked = await _showSafeDatePicker(
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+
+    if (picked == null) return;
+    addProvider.setPurchaseDate(picked);
+  }
+
+  Future<void> _pickExpiryDate() async {
+    final addProvider = context.read<AddItemProvider>();
+    final firstDate = DateUtils.dateOnly(
+      addProvider.purchaseDate,
     ).add(const Duration(days: 1));
     final lastDate = DateUtils.dateOnly(
       DateTime.now().add(const Duration(days: 365 * 2)),
     );
     final initialDate = _clampDate(
-      value: DateUtils.dateOnly(_expiryDate),
+      value: DateUtils.dateOnly(addProvider.expiryDate),
       min: firstDate,
       max: lastDate,
     );
@@ -160,44 +169,15 @@ class _AddItemScreenState extends State<AddItemScreen> {
       lastDate: lastDate,
     );
     if (picked != null) {
-      setState(() => _expiryDate = DateUtils.dateOnly(picked));
+      addProvider.setExpiryDate(picked);
     }
-  }
-
-  Future<void> _pickPurchaseDate() async {
-    final firstDate = DateUtils.dateOnly(
-      DateTime.now().subtract(const Duration(days: 365 * 3)),
-    );
-    final lastDate = DateUtils.dateOnly(DateTime.now());
-    final initialDate = _clampDate(
-      value: DateUtils.dateOnly(_purchaseDate),
-      min: firstDate,
-      max: lastDate,
-    );
-
-    final picked = await _showSafeDatePicker(
-      initialDate: initialDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
-    );
-
-    if (picked == null) {
-      return;
-    }
-
-    final purchaseDate = DateUtils.dateOnly(picked);
-    setState(() {
-      _purchaseDate = purchaseDate;
-      if (!_expiryDate.isAfter(_purchaseDate)) {
-        _expiryDate = _purchaseDate.add(const Duration(days: 1));
-      }
-    });
   }
 
   Future<void> _save() async {
-    if (_isSaving) {
-      return;
-    }
+    final addProvider = context.read<AddItemProvider>();
+    final inventoryProvider = context.read<InventoryProvider>();
+
+    if (addProvider.isSaving) return;
 
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -206,7 +186,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
       return;
     }
 
-    if (!_expiryDate.isAfter(_purchaseDate)) {
+    if (!addProvider.areDatesValid()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -217,7 +197,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
       return;
     }
 
-    final sanitizedName = _sanitizeName(_nameController.text);
+    final sanitizedName = addProvider.sanitizeName(_nameController.text);
     if (sanitizedName.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -234,47 +214,32 @@ class _AddItemScreenState extends State<AddItemScreen> {
       );
     }
 
-    setState(() => _isSaving = true);
+    addProvider.setSaving(true);
 
-    final data = {
-      'name': sanitizedName,
-      'category': _selectedCategory.value,
-      'quantity': _quantity,
-      'unit': _unit.toLowerCase(),
-      'purchase_date':
-          '${_purchaseDate.year}-${_purchaseDate.month.toString().padLeft(2, '0')}-${_purchaseDate.day.toString().padLeft(2, '0')}',
-      'expiry_date':
-          '${_expiryDate.year}-${_expiryDate.month.toString().padLeft(2, '0')}-${_expiryDate.day.toString().padLeft(2, '0')}',
-      'notes': 'Ubicación: $_location',
-    };
+    final data = addProvider.buildPayload(sanitizedName);
+    final success = await inventoryProvider.addItem(data);
 
-    final success = await context.read<InventoryProvider>().addItem(data);
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
-    setState(() => _isSaving = false);
+    addProvider.setSaving(false);
 
     if (success) {
-      final DateTime today = DateUtils.dateOnly(DateTime.now());
-      final int daysRemaining = _expiryDate.difference(today).inDays;
+      final int daysRemaining = addProvider.daysRemainingFromToday();
 
       if (daysRemaining >= 0 && daysRemaining <= 1) {
         await LocalNotificationsService.instance.showExpiringSoonNotification(
           itemName: sanitizedName,
           daysRemaining: daysRemaining,
         );
-
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
       }
 
       Navigator.of(context).pop(true);
       return;
     }
 
-    final error = context.read<InventoryProvider>().error;
+    final error = inventoryProvider.error;
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(error ?? 'No se pudo guardar el alimento')),
     );
@@ -436,6 +401,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Widget _buildNameInput() {
+    final addProvider = context.read<AddItemProvider>();
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -457,19 +423,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
             );
           }
         },
-        validator: (value) {
-          if (value == null || value.trim().isEmpty) {
-            return 'El nombre es obligatorio';
-          }
-          final sanitized = _sanitizeName(value);
-          if (sanitized.length < 2) {
-            return 'Debe tener al menos 2 caracteres';
-          }
-          if (!RegExp(r'[a-zA-ZÀ-ÿ0-9]').hasMatch(sanitized)) {
-            return 'Usa al menos una letra o número';
-          }
-          return null;
-        },
+        validator: addProvider.validateName,
         decoration: InputDecoration(
           hintText: 'Aguacate',
           hintStyle: TextStyle(
@@ -491,6 +445,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Widget _buildCategoryDropdown() {
+    final addProvider = context.watch<AddItemProvider>();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
@@ -499,7 +454,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<ItemCategory>(
-          value: _selectedCategory,
+          value: addProvider.category,
           isExpanded: true,
           icon: const Icon(
             Icons.keyboard_arrow_down,
@@ -512,7 +467,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
             );
           }).toList(),
           onChanged: (v) {
-            if (v != null) setState(() => _selectedCategory = v);
+            if (v != null) {
+              context.read<AddItemProvider>().setCategory(v);
+            }
           },
         ),
       ),
@@ -531,6 +488,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Widget _buildQuantitySelector() {
+    final addProvider = context.watch<AddItemProvider>();
     return Container(
       height: 50,
       decoration: BoxDecoration(
@@ -541,14 +499,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
         children: [
           _QuantityButton(
             icon: Icons.remove,
-            onTap: () {
-              if (_quantity > 1) setState(() => _quantity--);
-            },
+            onTap: () => context.read<AddItemProvider>().decrementQuantity(),
           ),
           Expanded(
             child: Center(
               child: Text(
-                '$_quantity',
+                '${addProvider.quantity}',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
@@ -559,7 +515,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           ),
           _QuantityButton(
             icon: Icons.add,
-            onTap: () => setState(() => _quantity++),
+            onTap: () => context.read<AddItemProvider>().incrementQuantity(),
           ),
         ],
       ),
@@ -567,6 +523,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Widget _buildUnitDropdown() {
+    final addProvider = context.watch<AddItemProvider>();
     return Container(
       height: 50,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -576,17 +533,19 @@ class _AddItemScreenState extends State<AddItemScreen> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: _unit,
+          value: addProvider.unit,
           isExpanded: true,
           icon: const Icon(
             Icons.keyboard_arrow_down,
             color: AppColors.textSecondary,
           ),
-          items: _units.map((u) {
+          items: addProvider.units.map((u) {
             return DropdownMenuItem(value: u, child: Text(u));
           }).toList(),
           onChanged: (v) {
-            if (v != null) setState(() => _unit = v);
+            if (v != null) {
+              context.read<AddItemProvider>().setUnit(v);
+            }
           },
         ),
       ),
@@ -594,7 +553,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Widget _buildPurchaseDatePicker() {
-    final formatted = DateFormat("d MMM yyyy", 'es').format(_purchaseDate);
+    final addProvider = context.watch<AddItemProvider>();
+    final formatted =
+        DateFormat("d MMM yyyy", 'es').format(addProvider.purchaseDate);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _pickPurchaseDate,
@@ -628,7 +589,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Widget _buildExpiryDatePicker() {
-    final formatted = DateFormat("d MMM yyyy", 'es').format(_expiryDate);
+    final addProvider = context.watch<AddItemProvider>();
+    final formatted =
+        DateFormat("d MMM yyyy", 'es').format(addProvider.expiryDate);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _pickExpiryDate,
@@ -662,6 +625,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Widget _buildLocationChips() {
+    final addProvider = context.watch<AddItemProvider>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -676,12 +640,13 @@ class _AddItemScreenState extends State<AddItemScreen> {
         const SizedBox(height: 10),
         Wrap(
           spacing: 10,
-          children: _locations.map((loc) {
-            final selected = _location == loc;
+          children: addProvider.locations.map((loc) {
+            final selected = addProvider.location == loc;
             return ChoiceChip(
               label: Text(loc),
               selected: selected,
-              onSelected: (_) => setState(() => _location = loc),
+              onSelected: (_) =>
+                  context.read<AddItemProvider>().setLocation(loc),
               selectedColor: AppColors.primary,
               backgroundColor: Colors.white,
               labelStyle: TextStyle(
@@ -705,11 +670,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Widget _buildSaveButton() {
+    final isSaving = context.watch<AddItemProvider>().isSaving;
     return SizedBox(
       width: double.infinity,
       height: 54,
       child: ElevatedButton(
-        onPressed: _isSaving ? null : _save,
+        onPressed: isSaving ? null : _save,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
@@ -719,7 +685,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           elevation: 0,
           textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
-        child: _isSaving
+        child: isSaving
             ? const SizedBox(
                 height: 22,
                 width: 22,

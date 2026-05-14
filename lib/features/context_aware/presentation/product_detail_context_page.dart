@@ -1,66 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/features/inventory/models/inventory_item.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../application/context_aware_service.dart';
-import '../data/services/location_service.dart';
-import '../data/services/weather_cache_service.dart';
-import '../data/services/weather_service.dart';
-import '../domain/storage_recommendation_engine.dart';
+import '../providers/context_aware_provider.dart';
 
-class ProductDetailContextPage extends StatefulWidget {
+class ProductDetailContextPage extends StatelessWidget {
   const ProductDetailContextPage({super.key, this.item});
 
   final InventoryItem? item;
 
   @override
-  State<ProductDetailContextPage> createState() =>
-      _ProductDetailContextPageState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider<ContextAwareProvider>(
+      create: (_) => ContextAwareProvider()..loadContext(),
+      child: _ProductDetailContextView(item: item),
+    );
+  }
 }
 
-class _ProductDetailContextPageState extends State<ProductDetailContextPage> {
-  late final ContextAwareService _contextAwareService;
-  late final StorageRecommendationEngine _recommendationEngine;
+class _ProductDetailContextView extends StatelessWidget {
+  const _ProductDetailContextView({required this.item});
 
-  ContextAwareState? _contextState;
-
-  @override
-  void initState() {
-    super.initState();
-    _recommendationEngine = const StorageRecommendationEngine();
-    _contextAwareService = ContextAwareService(
-      locationService: LocationService(),
-      weatherService: WeatherService(),
-      cacheService: WeatherCacheService(),
-      recommendationEngine: _recommendationEngine,
-    );
-    _contextState = ContextAwareState(
-      weather: null,
-      recommendation: _recommendationEngine.buildForWeather(null),
-      statusMessage:
-          'Cargando clima local para personalizar recomendaciones...',
-      fromCache: false,
-      usingFallback: true,
-    );
-    _loadContext();
-  }
-
-  Future<void> _loadContext() async {
-    final ContextAwareState state = await _contextAwareService
-        .loadContextAwareState();
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _contextState = state;
-    });
-  }
+  final InventoryItem? item;
 
   @override
   Widget build(BuildContext context) {
-    final ContextAwareState? contextState = _contextState;
-    final InventoryItem? selectedItem = widget.item;
+    final ContextAwareProvider provider = context.watch<ContextAwareProvider>();
+    final InventoryItem? selectedItem = item;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -70,27 +37,18 @@ class _ProductDetailContextPageState extends State<ProductDetailContextPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              _Header(onRefreshTap: _loadContext),
+              _Header(
+                onRefreshTap: () =>
+                    context.read<ContextAwareProvider>().loadContext(),
+              ),
               const SizedBox(height: 18),
               _ProductCard(item: selectedItem),
               const SizedBox(height: 18),
-              _AlertBanner(
-                text:
-                    contextState?.recommendation.alertText ??
-                    'Vence mañana — ¡úsalo hoy!',
-              ),
+              _AlertBanner(text: provider.recommendation.alertText),
               const SizedBox(height: 18),
-              _FreshnessCard(contextState: contextState, item: selectedItem),
+              _FreshnessCard(provider: provider, item: selectedItem),
               const SizedBox(height: 22),
-              _TipsSection(
-                tips:
-                    contextState?.recommendation.tips ??
-                    const <String>[
-                      'Si ya está maduro, guárdalo en la nevera para detener el proceso.',
-                      'Para acelerar la maduración, déjalo fuera junto a plátanos.',
-                      'Evita golpes para prevenir manchas oscuras internas.',
-                    ],
-              ),
+              _TipsSection(tips: provider.recommendation.tips),
               const SizedBox(height: 26),
               _PrimaryButton(
                 text: 'Ver recetas sugeridas',
@@ -140,7 +98,7 @@ class _Header extends StatelessWidget {
           ),
         ),
         _RoundHeaderButton(
-          icon: Icons.edit,
+          icon: Icons.refresh,
           onTap: () {
             onRefreshTap();
           },
@@ -198,7 +156,7 @@ class _ProductCard extends StatelessWidget {
           const SizedBox(height: 20),
           Text(
             productName,
-            style: TextStyle(
+            style: const TextStyle(
               fontFamily: 'Montserrat',
               fontSize: 42,
               fontWeight: FontWeight.w700,
@@ -208,7 +166,7 @@ class _ProductCard extends StatelessWidget {
           ),
           Text(
             quantityText,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 30,
               fontWeight: FontWeight.w600,
               color: AppColors.primary500,
@@ -275,9 +233,9 @@ class _AlertBanner extends StatelessWidget {
 }
 
 class _FreshnessCard extends StatelessWidget {
-  const _FreshnessCard({required this.contextState, required this.item});
+  const _FreshnessCard({required this.provider, required this.item});
 
-  final ContextAwareState? contextState;
+  final ContextAwareProvider provider;
   final InventoryItem? item;
 
   @override
@@ -285,9 +243,8 @@ class _FreshnessCard extends StatelessWidget {
     final String date = item == null
         ? _formatDateSpanish(DateTime.now())
         : 'Vence el ${_formatDateSpanish(item!.expiryDate)}';
-    final String weatherLabel = _buildWeatherLabel(contextState);
-    final String storageLabel =
-        contextState?.recommendation.storageLabel ?? 'Neutro';
+    final String weatherLabel = _buildWeatherLabel(provider);
+    final String storageLabel = provider.recommendation.storageLabel;
     final double freshnessValue = _buildFreshnessValue(item);
     final String expiryText = _buildExpiryLabel(item?.daysRemaining);
     final Color expiryColor = _buildExpiryColor(item?.daysRemaining);
@@ -385,29 +342,27 @@ class _FreshnessCard extends StatelessWidget {
               ),
             ],
           ),
-          if (contextState != null) ...<Widget>[
-            const SizedBox(height: 10),
-            Text(
-              contextState!.statusMessage,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
+          const SizedBox(height: 10),
+          Text(
+            provider.statusMessage,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
             ),
-          ],
+          ),
         ],
       ),
     );
   }
 
-  static String _buildWeatherLabel(ContextAwareState? state) {
-    if (state == null || state.weather == null) {
+  static String _buildWeatherLabel(ContextAwareProvider provider) {
+    if (provider.weather == null) {
       return 'Consumo sugerido';
     }
 
-    final String cacheLabel = state.fromCache ? ' · caché' : '';
-    final int roundedTemp = state.weather!.temperatureCelsius.round();
-    return '$roundedTemp°C · ${state.weather!.humidity}%$cacheLabel';
+    final String cacheLabel = provider.fromCache ? ' · caché' : '';
+    final int roundedTemp = provider.weather!.temperatureCelsius.round();
+    return '$roundedTemp°C · ${provider.weather!.humidity}%$cacheLabel';
   }
 
   static double _buildFreshnessValue(InventoryItem? item) {
