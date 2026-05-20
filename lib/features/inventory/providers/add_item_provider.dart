@@ -11,7 +11,7 @@ class AddItemProvider extends ChangeNotifier {
   DateTime _expiryDate = DateUtils.dateOnly(
     DateTime.now().add(const Duration(days: 7)),
   );
-  String _location = 'Despensa';
+  String _location = 'Nevera';
   bool _isSaving = false;
   String? _error;
 
@@ -141,7 +141,7 @@ class AddItemProvider extends ChangeNotifier {
     _expiryDate = DateUtils.dateOnly(
       DateTime.now().add(const Duration(days: 7)),
     );
-    _location = 'Despensa';
+    _location = 'Nevera';
     _isSaving = false;
     _error = null;
     notifyListeners();
