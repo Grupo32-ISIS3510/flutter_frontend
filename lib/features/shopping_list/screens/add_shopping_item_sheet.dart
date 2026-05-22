@@ -60,10 +60,11 @@ class _AddShoppingItemSheetState extends State<_AddShoppingItemSheet> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Center(
               child: Container(
                 width: 40,
@@ -157,7 +158,8 @@ class _AddShoppingItemSheetState extends State<_AddShoppingItemSheet> {
                 child: const Text('Agregar a la lista'),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
