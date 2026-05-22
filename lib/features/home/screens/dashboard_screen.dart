@@ -9,6 +9,7 @@ import 'package:second_serving_frontend/features/inventory/models/inventory_item
 import 'package:second_serving_frontend/shared/models/enums.dart';
 import 'package:second_serving_frontend/features/recipes/models/recipe.dart';
 import 'package:second_serving_frontend/features/analytics/providers/analytics_provider.dart';
+import 'package:second_serving_frontend/features/analytics/screens/savings_detail_screen.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/auth/providers/auth_provider.dart';
 import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
@@ -127,7 +128,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       elevation: 2,
       shadowColor: Colors.black.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(20),
-      child: Padding(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SavingsDetailScreen()),
+          );
+        },
+        child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
       child: Row(
         children: [
@@ -188,6 +196,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+        ),
       ),
     );
   }

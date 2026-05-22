@@ -20,6 +20,12 @@ class SavingsResponse {
       period: json['period'] as String,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'saved_cop': savedCop,
+        'wasted_cop': wastedCop,
+        'period': period,
+      };
 }
 
 class WasteTrendItem {
@@ -43,6 +49,13 @@ class WasteTrendItem {
       valueLostCop: double.parse(json['value_lost_cop'].toString()),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'month': month,
+        'category': category,
+        'items_discarded': itemsDiscarded,
+        'value_lost_cop': valueLostCop,
+      };
 }
 
 class WasteSummary {
