@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
+import 'package:second_serving_frontend/features/favorites/screens/favorites_screen.dart';
 import 'package:second_serving_frontend/features/recipes/config/recipe_images.dart';
 import 'package:second_serving_frontend/features/recipes/models/recipe.dart';
 import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
@@ -75,8 +76,17 @@ class _RecipesScreenState extends State<RecipesScreen> {
               ),
             ),
             GestureDetector(
-              onTap: () {},
-              child: const Icon(Icons.search, color: AppColors.textPrimary),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const FavoritesScreen(),
+                  ),
+                );
+              },
+              child: const Icon(
+                Icons.favorite_border,
+                color: AppColors.textPrimary,
+              ),
             ),
           ],
         ),
@@ -100,8 +110,10 @@ class _RecipesScreenState extends State<RecipesScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Row(
-              children: provider.availableStrategies.map((strategy) {
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: provider.availableStrategies.map((strategy) {
                 final isActive = strategy.runtimeType == provider.activeStrategy.runtimeType;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -149,7 +161,8 @@ class _RecipesScreenState extends State<RecipesScreen> {
                     ),
                   ),
                 );
-              }).toList(),
+                }).toList(),
+              ),
             ),
           ],
         ),
