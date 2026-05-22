@@ -25,6 +25,21 @@ class ShoppingSuggestion {
   });
 }
 
+/// Entrada interna del cache de sugerencias.
+class _CacheEntry {
+  final List<ShoppingSuggestion> suggestions;
+  final DateTime createdAt;
+  final int inputsHash;
+
+  _CacheEntry({
+    required this.suggestions,
+    required this.createdAt,
+    required this.inputsHash,
+  });
+
+  bool isExpired(Duration ttl) => DateTime.now().difference(createdAt) > ttl;
+}
+
 /// Genera sugerencias inteligentes para la lista de compras.
 ///
 /// Dos fuentes de sugerencias:
@@ -32,9 +47,97 @@ class ShoppingSuggestion {
 ///      y que probablemente el usuario necesite reponer.
 ///   2. Recetas: ingredientes que aparecen en las recetas sugeridas
 ///      por el motor pero no estan en el inventario actual.
+///
+/// ## Estrategia de caching (sprint 3)
+///
+/// Generar sugerencias implica iterar inventario + ingredientes de N recetas
+/// y aplicar deduplicacion. En el flujo real `refreshSuggestions` se invoca
+/// varias veces seguidas (al abrir la pantalla, al volver del background,
+/// despues de cada rebuild del provider). Para evitar recalculos innecesarios
+/// se implementa un cache en memoria con:
+///
+///   * **TTL configurable** (default 5 minutos).
+///   * **Invalidacion por contenido**: se calcula un hash de las entradas
+///     (nombres + cantidades + ids de receta + ids de la lista actual).
+///     Si el hash cambia, el cache se considera stale aunque no haya
+///     expirado el TTL.
+///   * **Invalidacion explicita** desde `ShoppingListProvider` cuando el
+///     usuario muta la lista (add, remove, toggle, clear).
+///   * **Telemetria simple** (`cacheHits` / `cacheMisses`) para validar la
+///     efectividad del cache durante el viva-voce.
 class ShoppingSuggestionsService {
+  static const Duration defaultTtl = Duration(minutes: 5);
+
+  final Duration ttl;
+  _CacheEntry? _cache;
+  int _cacheHits = 0;
+  int _cacheMisses = 0;
+
+  ShoppingSuggestionsService({this.ttl = defaultTtl});
+
+  int get cacheHits => _cacheHits;
+  int get cacheMisses => _cacheMisses;
+  bool get hasCachedResult => _cache != null && !_cache!.isExpired(ttl);
+
   /// Devuelve sugerencias deduplicadas contra items ya presentes en la lista.
+  ///
+  /// Si las entradas no han cambiado y el TTL sigue vigente, devuelve el
+  /// resultado memoizado sin recalcular.
   List<ShoppingSuggestion> generate({
+    required List<InventoryItem> activeInventory,
+    required List<InventoryItem> recentlyConsumed,
+    required List<RecipeDetail> nearbyRecipes,
+    required List<ShoppingItem> currentList,
+  }) {
+    final inputsHash = _computeInputsHash(
+      activeInventory: activeInventory,
+      recentlyConsumed: recentlyConsumed,
+      nearbyRecipes: nearbyRecipes,
+      currentList: currentList,
+    );
+
+    final cached = _cache;
+    if (cached != null &&
+        !cached.isExpired(ttl) &&
+        cached.inputsHash == inputsHash) {
+      _cacheHits++;
+      return cached.suggestions;
+    }
+
+    _cacheMisses++;
+    final suggestions = _compute(
+      activeInventory: activeInventory,
+      recentlyConsumed: recentlyConsumed,
+      nearbyRecipes: nearbyRecipes,
+      currentList: currentList,
+    );
+
+    _cache = _CacheEntry(
+      suggestions: suggestions,
+      createdAt: DateTime.now(),
+      inputsHash: inputsHash,
+    );
+
+    return suggestions;
+  }
+
+  /// Invalida el cache manualmente. Se llama desde el provider cuando el
+  /// usuario muta la lista de compras (add, remove, toggle, clear).
+  void invalidateCache() {
+    _cache = null;
+  }
+
+  /// Resetea contadores de telemetria. Util para tests.
+  void resetMetrics() {
+    _cacheHits = 0;
+    _cacheMisses = 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Computo real (lo que antes era el cuerpo de generate())
+  // ---------------------------------------------------------------------------
+
+  List<ShoppingSuggestion> _compute({
     required List<InventoryItem> activeInventory,
     required List<InventoryItem> recentlyConsumed,
     required List<RecipeDetail> nearbyRecipes,
@@ -81,6 +184,25 @@ class ShoppingSuggestionsService {
     }
 
     return suggestions;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hash de entradas para invalidacion por contenido.
+  // Usamos Object.hashAll sobre identificadores estables.
+  // ---------------------------------------------------------------------------
+
+  int _computeInputsHash({
+    required List<InventoryItem> activeInventory,
+    required List<InventoryItem> recentlyConsumed,
+    required List<RecipeDetail> nearbyRecipes,
+    required List<ShoppingItem> currentList,
+  }) {
+    return Object.hashAll([
+      Object.hashAll(activeInventory.map((i) => '${i.id}:${i.quantity}')),
+      Object.hashAll(recentlyConsumed.map((i) => '${i.id}:${i.name}')),
+      Object.hashAll(nearbyRecipes.map((r) => r.id)),
+      Object.hashAll(currentList.map((i) => '${i.id}:${i.purchased}')),
+    ]);
   }
 
   String _normalize(String s) => s.trim().toLowerCase();
