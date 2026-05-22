@@ -47,14 +47,14 @@ final ConnectivityService _connectivityService = ConnectivityService();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
+  await Future.wait([
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]),
+    initializeDateFormatting('es', null),
+    LocalNotificationsService.instance.initialize(),
+    _connectivityService.initialize(),
+    InventoryLocalDb.instance.initialize(),
+    FavoritesLocalDb.instance.initialize(),
   ]);
-  await initializeDateFormatting('es', null);
-  await LocalNotificationsService.instance.initialize();
-  await _connectivityService.initialize();
-  await InventoryLocalDb.instance.initialize();
-  await FavoritesLocalDb.instance.initialize();
 
   _pushNotificationsService = PushNotificationsService(
     notificationsApiService: NotificationsApiService(
