@@ -61,7 +61,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
         child: Row(
           children: [
             GestureDetector(
-              onTap: () {},
+              onTap: () => Navigator.of(context).maybePop(),
               child: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
             ),
             const Expanded(

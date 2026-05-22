@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/features/analytics/providers/analytics_provider.dart';
 import 'package:second_serving_frontend/features/inventory/models/inventory_item.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
+import 'package:second_serving_frontend/features/recipes/screens/recipes_screen.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../providers/context_aware_provider.dart';
@@ -86,7 +87,13 @@ class _ProductDetailContextView extends StatelessWidget {
               _PrimaryButton(
                 text: 'Ver recetas sugeridas',
                 icon: Icons.restaurant,
-                onTap: () {},
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const RecipesScreen(),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 16),
               _SecondaryButton(
