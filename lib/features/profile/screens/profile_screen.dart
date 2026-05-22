@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
 import 'package:second_serving_frontend/features/auth/providers/auth_provider.dart';
+import 'package:second_serving_frontend/features/notifications/presentation/notification_settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -72,14 +73,18 @@ class ProfileScreen extends StatelessWidget {
             title: 'Notificaciones',
             subtitle: 'Configura alertas de vencimiento',
             onTap: () {
-              // TODO: navegar a configuración de notificaciones
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const NotificationSettingsScreen(),
+                ),
+              );
             },
           ),
           _ProfileOption(
             icon: Icons.info_outlined,
             title: 'Acerca de',
             subtitle: 'Second Serving v1.0.0',
-            onTap: () {},
+            onTap: () => _showAboutInfo(context),
           ),
           const SizedBox(height: 24),
           OutlinedButton.icon(
@@ -97,6 +102,27 @@ class ProfileScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showAboutInfo(BuildContext context) {
+    showAboutDialog(
+      context: context,
+      applicationName: 'Second Serving',
+      applicationVersion: 'v1.0.0',
+      applicationIcon: const Icon(
+        Icons.eco,
+        color: AppColors.primary,
+        size: 40,
+      ),
+      children: const [
+        SizedBox(height: 8),
+        Text(
+          'Second Serving te ayuda a reducir el desperdicio de alimentos: '
+          'registra tu despensa, recibe alertas de vencimiento y descubre '
+          'recetas con lo que ya tienes.',
+        ),
+      ],
     );
   }
 }
