@@ -10,6 +10,7 @@ import 'package:second_serving_frontend/features/inventory/screens/inventory_scr
 import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
 import 'package:second_serving_frontend/features/recipes/screens/recipes_screen.dart';
 import 'package:second_serving_frontend/features/profile/screens/profile_screen.dart';
+import 'package:second_serving_frontend/features/analytics/services/feature_usage_telemetry_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,6 +38,11 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     setState(() => _currentIndex = index);
+
+    final usage = context.read<FeatureUsageTelemetryService>();
+    if (index == 1) usage.recordFeatureUse(FeatureIds.inventory);
+    if (index == 3) usage.recordFeatureUse(FeatureIds.recipes);
+
     if (index == 0) {
       context
           .read<InventoryProvider>()

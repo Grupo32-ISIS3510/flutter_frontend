@@ -5,6 +5,7 @@ import 'package:second_serving_frontend/features/inventory/providers/inventory_p
 import 'package:second_serving_frontend/features/inventory/services/expiry_telemetry_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/scan_telemetry_service.dart';
+import 'package:second_serving_frontend/features/analytics/services/feature_usage_telemetry_service.dart';
 
 /// ViewModel de conectividad (patrón MVVM).
 ///
@@ -21,6 +22,7 @@ class ConnectivityProvider extends ChangeNotifier {
   final ExpiryTelemetryService _expiryTelemetry;
   final ScreenAnalyticsService _screenAnalytics;
   final ScanTelemetryService _scanTelemetry;
+  final FeatureUsageTelemetryService _featureUsage;
 
   StreamSubscription<bool>? _subscription;
   bool _isOnline = true;
@@ -35,11 +37,13 @@ class ConnectivityProvider extends ChangeNotifier {
     required ExpiryTelemetryService expiryTelemetry,
     required ScreenAnalyticsService screenAnalytics,
     required ScanTelemetryService scanTelemetry,
+    required FeatureUsageTelemetryService featureUsage,
   })  : _service = connectivityService,
         _inventoryProvider = inventoryProvider,
         _expiryTelemetry = expiryTelemetry,
         _screenAnalytics = screenAnalytics,
-        _scanTelemetry = scanTelemetry {
+        _scanTelemetry = scanTelemetry,
+        _featureUsage = featureUsage {
     _isOnline = _service.isOnline;
     _subscription = _service.onStatusChange.listen(_onChanged);
   }
@@ -67,6 +71,7 @@ class ConnectivityProvider extends ChangeNotifier {
         _scanTelemetry.flushPendingToBackend(),
         _expiryTelemetry.flushToBackend(),
         _screenAnalytics.flushToBackend(),
+        _featureUsage.flushToBackend(),
       ]);
 
       await _inventoryProvider.loadItems();
