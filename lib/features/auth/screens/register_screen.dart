@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
@@ -80,6 +81,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
                 TextFormField(
                   controller: _nameController,
+                  maxLength: 50,
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(50),
+                  ],
                   decoration: const InputDecoration(
                     labelText: 'Nombre completo',
                     prefixIcon: Icon(Icons.person_outlined),

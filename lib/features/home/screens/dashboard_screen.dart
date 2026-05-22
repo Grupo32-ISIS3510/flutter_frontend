@@ -12,6 +12,9 @@ import 'package:second_serving_frontend/features/analytics/providers/analytics_p
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/auth/providers/auth_provider.dart';
 import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
+import 'package:second_serving_frontend/features/shopping_list/providers/shopping_list_provider.dart';
+import 'package:second_serving_frontend/features/shopping_list/screens/shopping_list_screen.dart';
+import 'package:second_serving_frontend/features/analytics/services/feature_usage_telemetry_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -30,6 +33,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      context
+          .read<FeatureUsageTelemetryService>()
+          .recordFeatureUse(FeatureIds.analytics);
       final analytics = context.read<AnalyticsProvider>();
       analytics.loadDashboard();
       analytics.loadMonthlySavings();
@@ -70,6 +76,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _buildHeader(context, userName, now),
               const SizedBox(height: 20),
               _buildStatsCard(analytics),
+              const SizedBox(height: 16),
+              const _ShoppingListShortcut(),
               const SizedBox(height: 24),
               _buildEatFirstSection(inventory.expiringItems, inventory.error),
               const SizedBox(height: 24),
@@ -586,6 +594,93 @@ class _ExpiringItemCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ShoppingListShortcut extends StatelessWidget {
+  const _ShoppingListShortcut();
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = context.watch<ShoppingListProvider>().pendingCount;
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ShoppingListScreen()),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.shopping_basket_outlined,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Lista de compras',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      pending == 0
+                          ? 'Sin pendientes — toca para revisar'
+                          : '$pending pendiente${pending == 1 ? '' : 's'} por comprar',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (pending > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$pending',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.textSecondary),
+            ],
+          ),
+        ),
       ),
     );
   }

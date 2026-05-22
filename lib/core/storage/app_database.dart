@@ -6,7 +6,7 @@ import 'package:sqflite/sqflite.dart';
 /// estructurados (inventario) que requieren persistencia entre sesiones.
 class AppDatabase {
   static const String _dbName = 'second_serving.db';
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 2;
 
   static Database? _database;
 
@@ -63,10 +63,34 @@ class AppDatabase {
         created_at TEXT NOT NULL
       )
     ''');
+
+    await _createShoppingListTable(db);
   }
 
   static Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Reserved for future schema migrations
+    if (oldVersion < 2) {
+      await _createShoppingListTable(db);
+    }
+  }
+
+  static Future<void> _createShoppingListTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE shopping_list_items (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        quantity REAL NOT NULL DEFAULT 1,
+        unit TEXT,
+        purchased INTEGER NOT NULL DEFAULT 0,
+        source TEXT NOT NULL DEFAULT 'manual',
+        source_ref TEXT,
+        created_at TEXT NOT NULL,
+        synced INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX idx_shopping_purchased ON shopping_list_items(purchased)
+    ''');
   }
 
   static Future<void> close() async {
