@@ -11,6 +11,7 @@ import 'package:second_serving_frontend/features/inventory/services/receipt_scan
 import 'package:second_serving_frontend/core/network/api_client.dart';
 import 'package:second_serving_frontend/features/inventory/services/scan_telemetry_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
+import 'package:second_serving_frontend/features/analytics/services/feature_usage_telemetry_service.dart';
 import 'package:second_serving_frontend/features/notifications/application/local_notifications_service.dart';
 
 class AddItemScreen extends StatelessWidget {
@@ -115,6 +116,9 @@ class _AddItemViewState extends State<_AddItemView> {
   }
 
   Future<void> _handleCameraScan() async {
+    context
+        .read<FeatureUsageTelemetryService>()
+        .recordFeatureUse(FeatureIds.scanReceipt);
     setState(() => _isScanning = true);
     final stopwatch = Stopwatch()..start();
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -20,6 +21,7 @@ import 'package:second_serving_frontend/features/inventory/data/inventory_local_
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/services/cached_inventory_service.dart';
 import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
+import 'package:second_serving_frontend/features/shopping_list/providers/shopping_list_provider.dart';
 import 'package:second_serving_frontend/core/network/api_client.dart';
 import 'package:second_serving_frontend/features/analytics/services/analytics_service.dart';
 import 'package:second_serving_frontend/features/auth/services/auth_service.dart';
@@ -37,6 +39,7 @@ import 'package:second_serving_frontend/core/network/connectivity_provider.dart'
 import 'package:second_serving_frontend/features/inventory/services/scan_telemetry_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/expiry_telemetry_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
+import 'package:second_serving_frontend/features/analytics/services/feature_usage_telemetry_service.dart';
 
 const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 late final PushNotificationsService _pushNotificationsService;
@@ -44,6 +47,9 @@ final ConnectivityService _connectivityService = ConnectivityService();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
   await initializeDateFormatting('es', null);
   await LocalNotificationsService.instance.initialize();
   await _connectivityService.initialize();
@@ -93,7 +99,10 @@ class _SecondServingAppState extends State<SecondServingApp> {
   late final RecipeProvider _recipeProvider;
   late final FavoritesProvider _favoritesProvider;
   late final AnalyticsProvider _analyticsProvider;
+  late final ShoppingListProvider _shoppingListProvider;
   late final ConnectivityProvider _connectivityProvider;
+  late final RecipeService _recipeService;
+  late final FeatureUsageTelemetryService _featureUsageTelemetry;
   late final GoRouter _router;
 
   StreamSubscription<String>? _pushTapSubscription;
@@ -114,8 +123,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
             remote: InventoryServiceImpl(_apiClient),
             db: InventoryLocalDb.instance,
           );
-    final RecipeService recipeService =
-        (ApiConfig.useMock || ApiConfig.useMockRecipes)
+    _recipeService = (ApiConfig.useMock || ApiConfig.useMockRecipes)
         ? MockRecipeService()
         : RecipeServiceImpl(_apiClient);
     final AnalyticsService analyticsService =
@@ -138,14 +146,17 @@ class _SecondServingAppState extends State<SecondServingApp> {
       inventoryService,
       onInventoryMutated: () => _analyticsProvider.loadMonthlySavings(),
     );
-    _recipeProvider = RecipeProvider(recipeService);
+    _recipeProvider = RecipeProvider(_recipeService);
     _favoritesProvider = FavoritesProvider();
+    _shoppingListProvider = ShoppingListProvider();
+    _featureUsageTelemetry = FeatureUsageTelemetryService(apiClient: _apiClient);
     _connectivityProvider = ConnectivityProvider(
       connectivityService: _connectivityService,
       inventoryProvider: _inventoryProvider,
       expiryTelemetry: ExpiryTelemetryService(apiClient: _apiClient),
       screenAnalytics: ScreenAnalyticsService(apiClient: _apiClient),
       scanTelemetry: ScanTelemetryService(apiClient: _apiClient),
+      featureUsage: _featureUsageTelemetry,
     );
     _router = createRouter(_authProvider);
 
@@ -177,6 +188,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
     _inventoryProvider.dispose();
     _recipeProvider.dispose();
     _favoritesProvider.dispose();
+    _shoppingListProvider.dispose();
     _analyticsProvider.dispose();
     _authProvider.dispose();
     _apiClient.dispose();
@@ -190,11 +202,14 @@ class _SecondServingAppState extends State<SecondServingApp> {
       providers: [
         Provider<ConnectivityService>.value(value: _connectivityService),
         Provider<ApiClient>.value(value: _apiClient),
+        Provider<RecipeService>.value(value: _recipeService),
+        Provider<FeatureUsageTelemetryService>.value(value: _featureUsageTelemetry),
         ChangeNotifierProvider.value(value: _authProvider),
         ChangeNotifierProvider.value(value: _inventoryProvider),
         ChangeNotifierProvider.value(value: _recipeProvider),
         ChangeNotifierProvider.value(value: _favoritesProvider),
         ChangeNotifierProvider.value(value: _analyticsProvider),
+        ChangeNotifierProvider.value(value: _shoppingListProvider),
         ChangeNotifierProvider.value(value: _connectivityProvider),
       ],
       child: MaterialApp.router(

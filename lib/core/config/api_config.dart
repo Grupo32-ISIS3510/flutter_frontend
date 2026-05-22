@@ -63,6 +63,10 @@ class ApiConfig {
       '$apiPrefix/telemetry/screen-events';
   static const String telemetryAbandonmentStats =
       '$apiPrefix/telemetry/abandonment-stats';
+  static const String telemetryFeatureEvent =
+      '$apiPrefix/telemetry/feature-events';
+  static const String telemetryFeatureUsageStats =
+      '$apiPrefix/telemetry/feature-usage-stats';
 
   // Sync
   static const String syncPush = '$apiPrefix/sync/push';

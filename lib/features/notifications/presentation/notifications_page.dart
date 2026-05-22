@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../analytics/services/feature_usage_telemetry_service.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -12,6 +14,17 @@ class NotificationsPage extends StatefulWidget {
 class _NotificationsPageState extends State<NotificationsPage> {
   int selectedTab = 0;
   int selectedBottomIndex = 2;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context
+          .read<FeatureUsageTelemetryService>()
+          .recordFeatureUse(FeatureIds.notifications);
+    });
+  }
 
   final List<String> tabs = <String>['Todas', 'Vencimiento', 'Recetas', 'Info'];
 
