@@ -21,8 +21,11 @@ class ReceiptParserService {
   List<ScannedProduct> parse(String rawText) {
     final purchaseDate = _extractPurchaseDate(rawText) ?? DateTime.now();
 
-    final lines =
-        rawText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    final lines = rawText
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
     final products = <ScannedProduct>[];
 
     for (final line in lines) {
@@ -96,13 +99,38 @@ class ReceiptParserService {
     if (line.length < 3) return true;
 
     const noisePatterns = [
-      'total', 'subtotal', 'sub-total', 'iva', 'impuesto',
-      'cambio', 'efectivo', 'tarjeta', 'nit', 'factura',
-      'hora', 'caja', 'cajero', 'tel', 'dir',
-      'gracias', 'vuelva', 'bienvenido', 'recibo', 'ticket',
-      'rut', 'boleta', 'cliente', 'vendedor', 'sucursal',
-      'descuento', 'ahorro', 'puntos', 'devolucion',
-      'forma de pago', 'medio de pago', 'transaccion',
+      'total',
+      'subtotal',
+      'sub-total',
+      'iva',
+      'impuesto',
+      'cambio',
+      'efectivo',
+      'tarjeta',
+      'nit',
+      'factura',
+      'hora',
+      'caja',
+      'cajero',
+      'tel',
+      'dir',
+      'gracias',
+      'vuelva',
+      'bienvenido',
+      'recibo',
+      'ticket',
+      'rut',
+      'boleta',
+      'cliente',
+      'vendedor',
+      'sucursal',
+      'descuento',
+      'ahorro',
+      'puntos',
+      'devolucion',
+      'forma de pago',
+      'medio de pago',
+      'transaccion',
     ];
 
     for (final pattern in noisePatterns) {
@@ -130,8 +158,10 @@ class ReceiptParserService {
     for (final pattern in pricePatterns) {
       final priceMatch = pattern.firstMatch(line);
       if (priceMatch != null) {
-        final priceStr =
-            priceMatch.group(1)!.replaceAll('.', '').replaceAll(',', '.');
+        final priceStr = priceMatch
+            .group(1)!
+            .replaceAll('.', '')
+            .replaceAll(',', '.');
         final parsed = double.tryParse(priceStr);
         if (parsed != null && parsed >= 50) {
           price = parsed;
@@ -146,8 +176,10 @@ class ReceiptParserService {
 
     final qtyPatterns = [
       RegExp(r'[xX]\s*(\d+\.?\d*)'),
-      RegExp(r'(\d+\.?\d*)\s*(kg|gr|g|lt|l|ml|un|pz|pzas?)\b',
-          caseSensitive: false),
+      RegExp(
+        r'(\d+\.?\d*)\s*(kg|gr|g|lt|l|ml|un|pz|pzas?)\b',
+        caseSensitive: false,
+      ),
       RegExp(r'^(\d+\.?\d*)\s+'),
     ];
 
@@ -215,33 +247,96 @@ class ReceiptParserService {
 
     const categoryKeywords = {
       ItemCategory.dairy: [
-        'leche', 'yogur', 'yogurt', 'queso', 'crema', 'mantequilla', 'kumis',
+        'leche',
+        'yogur',
+        'yogurt',
+        'queso',
+        'crema',
+        'mantequilla',
+        'kumis',
       ],
       ItemCategory.meat: [
-        'pollo', 'carne', 'res', 'cerdo', 'pechuga', 'costilla', 'chorizo',
-        'jamon', 'salchicha', 'tocineta', 'salmon', 'pescado', 'atun',
+        'pollo',
+        'carne',
+        'res',
+        'cerdo',
+        'pechuga',
+        'costilla',
+        'chorizo',
+        'jamon',
+        'salchicha',
+        'tocineta',
+        'salmon',
+        'pescado',
+        'atun',
       ],
       ItemCategory.fruits: [
-        'manzana', 'banana', 'banano', 'naranja', 'limon', 'fresa', 'uva',
-        'piña', 'mango', 'aguacate', 'papaya', 'melon', 'sandia', 'mora',
+        'manzana',
+        'banana',
+        'banano',
+        'naranja',
+        'limon',
+        'fresa',
+        'uva',
+        'piña',
+        'mango',
+        'aguacate',
+        'papaya',
+        'melon',
+        'sandia',
+        'mora',
         'fruta',
       ],
       ItemCategory.vegetables: [
-        'tomate', 'cebolla', 'papa', 'zanahoria', 'lechuga', 'pepino',
-        'brocoli', 'espinaca', 'pimenton', 'ajo', 'cilantro', 'apio',
-        'maiz', 'verdura', 'arveja',
+        'tomate',
+        'cebolla',
+        'papa',
+        'zanahoria',
+        'lechuga',
+        'pepino',
+        'brocoli',
+        'espinaca',
+        'pimenton',
+        'ajo',
+        'cilantro',
+        'apio',
+        'maiz',
+        'verdura',
+        'arveja',
       ],
       ItemCategory.grains: [
-        'arroz', 'pasta', 'pan', 'harina', 'avena', 'cereal', 'lenteja',
-        'frijol', 'garbanzo', 'granola',
+        'arroz',
+        'pasta',
+        'pan',
+        'harina',
+        'avena',
+        'cereal',
+        'lenteja',
+        'frijol',
+        'garbanzo',
+        'granola',
       ],
       ItemCategory.beverages: [
-        'jugo', 'agua', 'gaseosa', 'cerveza', 'vino', 'cafe', 'te', 'soda',
-        'refresco', 'bebida',
+        'jugo',
+        'agua',
+        'gaseosa',
+        'cerveza',
+        'vino',
+        'cafe',
+        'te',
+        'soda',
+        'refresco',
+        'bebida',
       ],
       ItemCategory.snacks: [
-        'galleta', 'chocolate', 'dulce', 'chip', 'papa frita', 'gomita',
-        'snack', 'barra',
+        'galleta',
+        'chocolate',
+        'dulce',
+        'chip',
+        'papa frita',
+        'gomita',
+        'snack',
+        'barra',
       ],
     };
 

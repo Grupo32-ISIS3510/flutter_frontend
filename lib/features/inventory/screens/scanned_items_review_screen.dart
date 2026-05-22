@@ -287,10 +287,7 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
             const SizedBox(height: 4),
             Text(
               'Vencimiento estimado por categoría — puedes editar cada fecha',
-              style: TextStyle(
-                color: Colors.orange.shade700,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: Colors.orange.shade700, fontSize: 11),
             ),
           ],
         ],

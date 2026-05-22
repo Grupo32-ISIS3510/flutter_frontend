@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
+import 'package:second_serving_frontend/features/favorites/models/favorite_recipe.dart';
+import 'package:second_serving_frontend/features/favorites/providers/favorites_provider.dart';
 import 'package:second_serving_frontend/features/recipes/config/recipe_images.dart';
 import 'package:second_serving_frontend/features/recipes/models/recipe.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
@@ -26,6 +28,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       final provider = context.read<RecipeProvider>();
       provider.loadRecipeDetail(widget.recipeId);
       provider.markAsViewed(widget.recipeId);
+      context.read<FavoritesProvider>().load();
     });
   }
 
@@ -153,11 +156,49 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           child: const Icon(Icons.arrow_back, color: Colors.white),
         ),
       ),
+      actions: [_buildFavoriteToggle(recipe)],
       flexibleSpace: FlexibleSpaceBar(
         background: RecipeImages.buildImage(
           recipeName: recipe.name,
           category: recipe.category.value,
           height: 220,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFavoriteToggle(RecipeDetail recipe) {
+    final favorites = context.watch<FavoritesProvider>();
+    final isFav = favorites.isFavorite(recipe.id);
+
+    return GestureDetector(
+      onTap: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        final nowFav = await context
+            .read<FavoritesProvider>()
+            .toggle(FavoriteRecipe.fromDetail(recipe));
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              nowFav
+                  ? '${recipe.name} guardada en favoritas'
+                  : '${recipe.name} eliminada de favoritas',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.3),
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          isFav ? Icons.favorite : Icons.favorite_border,
+          color: isFav ? AppColors.secondary : Colors.white,
         ),
       ),
     );

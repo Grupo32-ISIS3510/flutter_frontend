@@ -15,6 +15,8 @@ import 'package:second_serving_frontend/core/router/router.dart';
 import 'package:second_serving_frontend/core/widgets/offline_banner.dart';
 import 'package:second_serving_frontend/features/analytics/providers/analytics_provider.dart';
 import 'package:second_serving_frontend/features/auth/providers/auth_provider.dart';
+import 'package:second_serving_frontend/features/favorites/data/favorites_local_db.dart';
+import 'package:second_serving_frontend/features/favorites/providers/favorites_provider.dart';
 import 'package:second_serving_frontend/features/inventory/data/inventory_local_db.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/services/cached_inventory_service.dart';
@@ -52,6 +54,7 @@ void main() async {
   await LocalNotificationsService.instance.initialize();
   await _connectivityService.initialize();
   await InventoryLocalDb.instance.initialize();
+  await FavoritesLocalDb.instance.initialize();
 
   _pushNotificationsService = PushNotificationsService(
     notificationsApiService: NotificationsApiService(
@@ -94,6 +97,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
   late final AuthProvider _authProvider;
   late final InventoryProvider _inventoryProvider;
   late final RecipeProvider _recipeProvider;
+  late final FavoritesProvider _favoritesProvider;
   late final AnalyticsProvider _analyticsProvider;
   late final ShoppingListProvider _shoppingListProvider;
   late final ConnectivityProvider _connectivityProvider;
@@ -131,7 +135,11 @@ class _SecondServingAppState extends State<SecondServingApp> {
       authService,
       _apiClient,
       onAuthenticated: _syncPushTokenAfterAuth,
-      onLogout: InventoryLocalDb.instance.clear,
+      onLogout: () async {
+        await InventoryLocalDb.instance.clear();
+        await FavoritesLocalDb.instance.clear();
+        _favoritesProvider.reset();
+      },
     );
     _analyticsProvider = AnalyticsProvider(analyticsService);
     _inventoryProvider = InventoryProvider(
@@ -139,6 +147,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
       onInventoryMutated: () => _analyticsProvider.loadMonthlySavings(),
     );
     _recipeProvider = RecipeProvider(_recipeService);
+    _favoritesProvider = FavoritesProvider();
     _shoppingListProvider = ShoppingListProvider();
     _featureUsageTelemetry = FeatureUsageTelemetryService(apiClient: _apiClient);
     _connectivityProvider = ConnectivityProvider(
@@ -178,6 +187,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
     _connectivityProvider.dispose();
     _inventoryProvider.dispose();
     _recipeProvider.dispose();
+    _favoritesProvider.dispose();
     _shoppingListProvider.dispose();
     _analyticsProvider.dispose();
     _authProvider.dispose();
@@ -197,6 +207,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
         ChangeNotifierProvider.value(value: _authProvider),
         ChangeNotifierProvider.value(value: _inventoryProvider),
         ChangeNotifierProvider.value(value: _recipeProvider),
+        ChangeNotifierProvider.value(value: _favoritesProvider),
         ChangeNotifierProvider.value(value: _analyticsProvider),
         ChangeNotifierProvider.value(value: _shoppingListProvider),
         ChangeNotifierProvider.value(value: _connectivityProvider),
