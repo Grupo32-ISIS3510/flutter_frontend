@@ -133,6 +133,9 @@ class RecipeProvider extends ChangeNotifier {
   Future<void> loadRecipeDetail(String id) async {
     _isLoading = true;
     _error = null;
+    // Limpiar el detalle anterior: si la nueva receta no está en caché y la red
+    // falla (offline), evita mostrar por error la receta cargada previamente.
+    _selectedRecipe = null;
     notifyListeners();
 
     // 1) Leer del caché local
