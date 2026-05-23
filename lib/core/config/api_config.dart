@@ -1,5 +1,5 @@
 class ApiConfig {
-  static const bool useMock = false;
+  static const bool useMock = false; // Cambiar a false para usar el backend real
 
   // Controles por módulo: true = forzar mock aunque useMock sea false
   // Cuando el backend esté listo con auth, cambiar useMock a false

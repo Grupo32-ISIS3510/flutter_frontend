@@ -40,6 +40,24 @@ class InventoryProvider extends ChangeNotifier {
 
   List<InventoryItem> get items => _items;
   List<InventoryItem> get expiringItems => _expiringItems;
+
+  // ── Micro-optimización (PPoF #3) ─────────────────────────────────────────
+  // Getter memoizado con los nombres de los primeros 8 ingredientes por vencer.
+  // Evita recalcular `map → toSet → take → toList` en cada `build()` de
+  // RecipesScreen: solo recomputa cuando cambia la referencia de _expiringItems.
+  List<String>? _cachedChipNames;
+  List<InventoryItem>? _lastExpiringRef;
+
+  List<String> get topExpiringIngredientNames {
+    if (identical(_lastExpiringRef, _expiringItems) && _cachedChipNames != null) {
+      return _cachedChipNames!;
+    }
+    _lastExpiringRef = _expiringItems;
+    _cachedChipNames =
+        _expiringItems.map((i) => i.name).toSet().take(8).toList();
+    return _cachedChipNames!;
+  }
+
   int get total => _total;
   bool get isLoading => _isLoading;
   String? get error => _error;
