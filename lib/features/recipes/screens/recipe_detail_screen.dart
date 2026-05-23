@@ -108,9 +108,20 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     final provider = context.watch<RecipeProvider>();
     final recipe = provider.selectedRecipe;
 
+    // Sin receta cargada: spinner mientras carga; si terminó y sigue nula
+    // (p. ej. sin conexión y no estaba en caché) → estado "no disponible".
+    if (recipe == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: provider.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _buildUnavailableState(context),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: provider.isLoading || recipe == null
+      body: provider.isLoading
           ? const Center(child: CircularProgressIndicator())
           : CustomScrollView(
               slivers: [
@@ -137,6 +148,53 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildUnavailableState(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            const Spacer(),
+            Icon(Icons.cloud_off,
+                size: 64, color: AppColors.textLight.withValues(alpha: 0.6)),
+            const SizedBox(height: 16),
+            const Text(
+              'Receta no disponible sin conexión',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Aún no habías abierto esta receta, por eso no está\nguardada localmente. Conéctate para verla.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () =>
+                  context.read<RecipeProvider>().loadRecipeDetail(widget.recipeId),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
+            const Spacer(),
+          ],
+        ),
+      ),
     );
   }
 
