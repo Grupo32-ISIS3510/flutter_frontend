@@ -171,12 +171,12 @@ class _RecipesScreenState extends State<RecipesScreen> {
   }
 
   Widget _buildIngredientChips() {
-    final inventoryItems = context.watch<InventoryProvider>().expiringItems;
-    final ingredients = inventoryItems
-        .map((item) => item.name)
-        .toSet()
-        .take(8)
-        .toList();
+    // Micro-optimización (PPoF #3): `select` escucha solo el getter memoizado
+    // en vez de `watch` sobre todo el provider, y el cómputo
+    // (map → toSet → take → toList) ya no se rehace en cada `build()`.
+    final ingredients = context.select<InventoryProvider, List<String>>(
+      (p) => p.topExpiringIngredientNames,
+    );
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),

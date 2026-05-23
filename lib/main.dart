@@ -158,7 +158,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
       onInventoryMutated: () => _analyticsProvider.loadMonthlySavings(),
     );
     _recipeProvider = RecipeProvider(_recipeService);
-    _favoritesProvider = FavoritesProvider();
+    _favoritesProvider = FavoritesProvider(connectivity: _connectivityService);
     _shoppingListProvider = ShoppingListProvider();
     _featureUsageTelemetry = FeatureUsageTelemetryService(apiClient: _apiClient);
     _connectivityProvider = ConnectivityProvider(

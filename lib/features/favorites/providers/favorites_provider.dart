@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:second_serving_frontend/core/connectivity/connectivity_service.dart';
 import 'package:second_serving_frontend/features/favorites/data/favorites_local_db.dart';
 import 'package:second_serving_frontend/features/favorites/models/favorite_recipe.dart';
 import 'package:second_serving_frontend/shared/models/enums.dart';
@@ -13,21 +16,54 @@ import 'package:second_serving_frontend/shared/models/enums.dart';
 ///   - Mantiene un `Set<String>` de IDs en memoria para lookups O(1) desde los
 ///     botones de corazón (sin pegarle a la DB en cada `build`).
 ///   - Cada mutación escribe primero en disco y luego refresca el estado.
+///
+/// Estrategia de Conectividad Eventual (local-first / offline-first):
+///   - La feature NO depende de la red: agregar/quitar favoritos y la BQ de
+///     distribución funcionan 100% offline porque la fuente de verdad es local.
+///     Por eso no hay riesgo de pérdida de datos ni de UI bloqueada sin conexión.
+///   - El ViewModel escucha [ConnectivityService.onStatusChange] y expone
+///     [isOnline] para que la vista informe el estado.
+///   - Al reconectar (offline → online) refresca el estado desde el almacén
+///     local (`load()`), reconciliando la vista — el punto de extensión natural
+///     para una sincronización con backend en el futuro.
 class FavoritesProvider extends ChangeNotifier {
   final FavoritesLocalDb _db;
+  final ConnectivityService? _connectivity;
+  StreamSubscription<bool>? _connectivitySub;
 
-  FavoritesProvider({FavoritesLocalDb? db})
-      : _db = db ?? FavoritesLocalDb.instance;
+  FavoritesProvider({FavoritesLocalDb? db, ConnectivityService? connectivity})
+      : _db = db ?? FavoritesLocalDb.instance,
+        _connectivity = connectivity {
+    if (_connectivity != null) {
+      _isOnline = _connectivity.isOnline;
+      _connectivitySub = _connectivity.onStatusChange.listen(_onConnectivityChanged);
+    }
+  }
 
   List<FavoriteRecipe> _favorites = [];
   Set<String> _favoriteIds = <String>{};
   Map<String, int> _categoryDistribution = <String, int>{};
   bool _isLoading = false;
+  bool _isOnline = true;
 
   List<FavoriteRecipe> get favorites => _favorites;
   bool get isLoading => _isLoading;
   bool get isEmpty => _favorites.isEmpty;
   int get count => _favorites.length;
+
+  /// Estado de conectividad para que la vista muestre el banner local-first.
+  bool get isOnline => _isOnline;
+
+  /// Reacciona a cambios de red: al volver online, reconcilia desde el almacén
+  /// local (estrategia de conectividad eventual).
+  void _onConnectivityChanged(bool online) {
+    final wasOffline = !_isOnline;
+    _isOnline = online;
+    notifyListeners();
+    if (online && wasOffline) {
+      unawaited(load());
+    }
+  }
 
   /// BQ — Distribución de favoritos por categoría, ordenada de mayor a menor.
   /// Lista de (categoría, conteo) lista para pintar en la vista.
@@ -86,5 +122,11 @@ class FavoritesProvider extends ChangeNotifier {
     _favoriteIds = <String>{};
     _categoryDistribution = <String, int>{};
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    super.dispose();
   }
 }

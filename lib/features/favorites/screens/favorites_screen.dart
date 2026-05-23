@@ -38,32 +38,39 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       appBar: AppBar(
         title: const Text('Mis favoritas'),
       ),
-      body: provider.isLoading && provider.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: () => context.read<FavoritesProvider>().load(),
-              child: provider.isEmpty
-                  ? _buildEmptyState()
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                      children: [
-                        _BqInsightCard(provider: provider),
-                        const SizedBox(height: 20),
-                        const Text(
-                          'Guardadas',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
+      body: Column(
+        children: [
+          if (!provider.isOnline) const _OfflineLocalBanner(),
+          Expanded(
+            child: provider.isLoading && provider.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(
+                    onRefresh: () => context.read<FavoritesProvider>().load(),
+                    child: provider.isEmpty
+                        ? _buildEmptyState()
+                        : ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                            children: [
+                              _BqInsightCard(provider: provider),
+                              const SizedBox(height: 20),
+                              const Text(
+                                'Guardadas',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              ...provider.favorites.map(
+                                (fav) => _FavoriteCard(favorite: fav),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        ...provider.favorites.map(
-                          (fav) => _FavoriteCard(favorite: fav),
-                        ),
-                      ],
-                    ),
-            ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -93,6 +100,39 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Banner de la estrategia de conectividad eventual (local-first): informa
+/// que, sin conexión, los favoritos siguen disponibles y editables porque la
+/// fuente de verdad es local (SQLite). Al reconectar, el provider reconcilia.
+class _OfflineLocalBanner extends StatelessWidget {
+  const _OfflineLocalBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.grey.shade800,
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.cloud_off, color: Colors.white, size: 18),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Sin conexión — tus favoritas están guardadas localmente y siguen disponibles',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
