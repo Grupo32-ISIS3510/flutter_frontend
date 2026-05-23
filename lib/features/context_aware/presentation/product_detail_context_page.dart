@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:second_serving_frontend/features/analytics/providers/analytics_provider.dart';
 import 'package:second_serving_frontend/features/inventory/models/inventory_item.dart';
+import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
+import 'package:second_serving_frontend/features/recipes/screens/recipes_screen.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../providers/context_aware_provider.dart';
@@ -23,6 +28,35 @@ class _ProductDetailContextView extends StatelessWidget {
   const _ProductDetailContextView({required this.item});
 
   final InventoryItem? item;
+
+  Future<void> _handleConsume(BuildContext context) async {
+    final selectedItem = item;
+    if (selectedItem == null) return;
+
+    final inventory = context.read<InventoryProvider>();
+    final analytics = context.read<AnalyticsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final ok = await inventory.consumeItem(selectedItem.id);
+    if (!context.mounted) return;
+
+    if (!ok) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(inventory.error ?? 'No se pudo marcar como consumido'),
+        ),
+      );
+      return;
+    }
+
+    unawaited(analytics.loadMonthlySavings());
+
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Item marcado como consumido')),
+    );
+    navigator.pop(true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,13 +87,19 @@ class _ProductDetailContextView extends StatelessWidget {
               _PrimaryButton(
                 text: 'Ver recetas sugeridas',
                 icon: Icons.restaurant,
-                onTap: () {},
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const RecipesScreen(),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 16),
               _SecondaryButton(
                 text: 'Marcar como consumido',
                 icon: Icons.check_circle,
-                onTap: () {},
+                onTap: () => _handleConsume(context),
               ),
               const SizedBox(height: 20),
             ],
@@ -360,7 +400,11 @@ class _FreshnessCard extends StatelessWidget {
       return 'Consumo sugerido';
     }
 
-    final String cacheLabel = provider.fromCache ? ' · caché' : '';
+    final String cacheLabel = provider.isStale
+        ? ' · desactualizado'
+        : provider.fromCache
+        ? ' · caché'
+        : '';
     final int roundedTemp = provider.weather!.temperatureCelsius.round();
     return '$roundedTemp°C · ${provider.weather!.humidity}%$cacheLabel';
   }

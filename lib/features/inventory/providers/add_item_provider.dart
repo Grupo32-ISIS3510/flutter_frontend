@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:second_serving_frontend/shared/models/enums.dart';
 
 class AddItemProvider extends ChangeNotifier {
-  static final RegExp _allowedNameChars =
-      RegExp(r"[a-zA-ZÀ-ÿ0-9'.,()/\-\s]");
+  static final RegExp _allowedNameChars = RegExp(r"[a-zA-ZÀ-ÿ0-9'.,()/\-\s]");
 
   ItemCategory _category = ItemCategory.fruits;
   int _quantity = 2;
@@ -12,7 +11,7 @@ class AddItemProvider extends ChangeNotifier {
   DateTime _expiryDate = DateUtils.dateOnly(
     DateTime.now().add(const Duration(days: 7)),
   );
-  String _location = 'Despensa';
+  String _location = 'Nevera';
   bool _isSaving = false;
   String? _error;
 
@@ -114,12 +113,13 @@ class AddItemProvider extends ChangeNotifier {
     return _expiryDate.isAfter(_purchaseDate);
   }
 
-  Map<String, dynamic> buildPayload(String sanitizedName) {
+  Map<String, dynamic> buildPayload(String sanitizedName, {double? unitPrice}) {
     return {
       'name': sanitizedName,
       'category': _category.value,
       'quantity': _quantity,
       'unit': _unit.toLowerCase(),
+      if (unitPrice != null) 'unit_price': unitPrice,
       'purchase_date':
           '${_purchaseDate.year}-${_purchaseDate.month.toString().padLeft(2, '0')}-${_purchaseDate.day.toString().padLeft(2, '0')}',
       'expiry_date':
@@ -141,7 +141,7 @@ class AddItemProvider extends ChangeNotifier {
     _expiryDate = DateUtils.dateOnly(
       DateTime.now().add(const Duration(days: 7)),
     );
-    _location = 'Despensa';
+    _location = 'Nevera';
     _isSaving = false;
     _error = null;
     notifyListeners();

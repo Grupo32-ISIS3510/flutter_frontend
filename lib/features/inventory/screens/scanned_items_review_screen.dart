@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
 import 'package:second_serving_frontend/shared/models/enums.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/services/receipt_scanner_service.dart';
+import 'package:second_serving_frontend/core/network/api_client.dart';
+import 'package:second_serving_frontend/features/inventory/services/expiry_telemetry_service.dart';
+import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
 import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
 
 class ScannedItemsReviewScreen extends StatefulWidget {
@@ -24,6 +28,10 @@ class ScannedItemsReviewScreen extends StatefulWidget {
 class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
   late List<ScannedProduct> _products;
   bool _isSaving = false;
+  late final ExpiryTelemetryService _expiryTelemetry;
+  late final ScreenAnalyticsService _screenAnalytics;
+  bool _exitRecorded = false;
+  bool _servicesInitialized = false;
 
   @override
   void initState() {
@@ -31,7 +39,33 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
     _products = widget.products;
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_servicesInitialized) {
+      _servicesInitialized = true;
+      final apiClient = context.read<ApiClient>();
+      _expiryTelemetry = ExpiryTelemetryService(apiClient: apiClient);
+      _screenAnalytics = ScreenAnalyticsService(apiClient: apiClient);
+      _screenAnalytics.recordEnter('scanned_review');
+    }
+  }
+
+  void _recordExitOnce(String reason) {
+    if (_exitRecorded) return;
+    _exitRecorded = true;
+    _screenAnalytics.recordExit('scanned_review', reason);
+  }
+
+  @override
+  void dispose() {
+    _recordExitOnce('back');
+    super.dispose();
+  }
+
   int get _selectedCount => _products.where((p) => p.selected).length;
+
+  String _formatDate(DateTime d) => DateFormat('d MMM yyyy', 'es').format(d);
 
   Future<void> _saveAll() async {
     final selected = _products.where((p) => p.selected).toList();
@@ -45,15 +79,21 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
     setState(() => _isSaving = true);
 
     final inventory = context.read<InventoryProvider>();
-    int savedCount = 0;
+    final recipes = context.read<RecipeProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    int syncedCount = 0;
+    int queuedCount = 0;
     final now = DateTime.now();
     final purchaseDate =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final expiryDate = now.add(const Duration(days: 7));
-    final expiryStr =
-        '${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';
+    final defaultExpiry = now.add(const Duration(days: 7));
 
     for (final product in selected) {
+      final expiry = product.expiryDate ?? defaultExpiry;
+      final expiryStr =
+          '${expiry.year}-${expiry.month.toString().padLeft(2, '0')}-${expiry.day.toString().padLeft(2, '0')}';
+
       final data = {
         'name': product.name,
         'category': product.category.value,
@@ -63,24 +103,49 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
         'purchase_date': purchaseDate,
         'expiry_date': expiryStr,
       };
-      final ok = await inventory.addItem(data);
-      if (ok) savedCount++;
+      final result = await inventory.addItem(data);
+      if (result == 'synced') syncedCount++;
+      if (result == 'queued') queuedCount++;
+
+      _expiryTelemetry.recordAccuracy(
+        category: product.category.value,
+        ocrDetectedDate: product.expiryDateFromOcr,
+        ocrDate: product.expiryDateFromOcr ? product.expiryDate : null,
+        userConfirmedDate: expiry,
+      );
     }
 
     if (mounted) {
       await inventory.loadItems();
       await inventory.loadExpiringItems(days: 30);
-      if (mounted) {
-        context.read<RecipeProvider>().loadSuggestions();
-      }
+      if (!mounted) return;
+
+      recipes.loadSuggestions();
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$savedCount producto${savedCount == 1 ? '' : 's'} agregado${savedCount == 1 ? '' : 's'}'),
-          backgroundColor: AppColors.success,
-        ),
+
+      final total = syncedCount + queuedCount;
+      final String message;
+      final Color bgColor;
+
+      if (queuedCount == 0) {
+        message =
+            '$total producto${total == 1 ? '' : 's'} agregado${total == 1 ? '' : 's'}';
+        bgColor = AppColors.success;
+      } else if (syncedCount == 0) {
+        message =
+            '$total producto${total == 1 ? '' : 's'} guardado${total == 1 ? '' : 's'} localmente — se sincronizará${total == 1 ? '' : 'n'} con conexión';
+        bgColor = Colors.orange;
+      } else {
+        message =
+            '$syncedCount sincronizado${syncedCount == 1 ? '' : 's'}, $queuedCount pendiente${queuedCount == 1 ? '' : 's'} de sincronizar';
+        bgColor = Colors.orange;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: bgColor),
       );
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      _recordExitOnce('completed');
+      navigator.popUntil((route) => route.isFirst);
     }
   }
 
@@ -103,31 +168,42 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildSummaryBar(),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                itemCount: _products.length,
-                itemBuilder: (context, i) => _ProductCard(
-                  product: _products[i],
-                  onToggle: () {
-                    setState(() => _products[i].selected = !_products[i].selected);
-                  },
-                  onEdit: () => _editProduct(i),
-                  onDelete: () {
-                    setState(() => _products.removeAt(i));
-                  },
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) _recordExitOnce('back');
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
+              _buildSummaryBar(),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  itemCount: _products.length,
+                  itemBuilder: (context, i) => _ProductCard(
+                    product: _products[i],
+                    formatDate: _formatDate,
+                    onToggle: () {
+                      setState(
+                        () => _products[i].selected = !_products[i].selected,
+                      );
+                    },
+                    onEdit: () => _editProduct(i),
+                    onDelete: () {
+                      setState(() => _products.removeAt(i));
+                    },
+                  ),
                 ),
               ),
-            ),
-            _buildBottomBar(),
-          ],
+              _buildBottomBar(),
+            ],
+          ),
         ),
       ),
     );
@@ -147,7 +223,11 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
                 color: AppColors.textLight.withValues(alpha: 0.3),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.arrow_back, size: 20, color: AppColors.textPrimary),
+              child: const Icon(
+                Icons.arrow_back,
+                size: 20,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -163,7 +243,10 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
           ),
           if (widget.rawText != null)
             IconButton(
-              icon: const Icon(Icons.article_outlined, color: AppColors.textSecondary),
+              icon: const Icon(
+                Icons.article_outlined,
+                color: AppColors.textSecondary,
+              ),
               onPressed: () => _showRawText(),
               tooltip: 'Ver texto detectado',
             ),
@@ -173,6 +256,7 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
   }
 
   Widget _buildSummaryBar() {
+    final withDate = _products.where((p) => p.expiryDate != null).length;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -180,21 +264,32 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
         color: AppColors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Icon(Icons.receipt_long, color: AppColors.primary, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '${_products.length} encontrado${_products.length == 1 ? '' : 's'} · $_selectedCount seleccionado${_selectedCount == 1 ? '' : 's'}',
-              style: TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+          Row(
+            children: [
+              Icon(Icons.receipt_long, color: AppColors.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${_products.length} encontrado${_products.length == 1 ? '' : 's'} · $_selectedCount seleccionado${_selectedCount == 1 ? '' : 's'}',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              overflow: TextOverflow.ellipsis,
-            ),
+            ],
           ),
+          if (withDate > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Vencimiento estimado por categoría — puedes editar cada fecha',
+              style: TextStyle(color: Colors.orange.shade700, fontSize: 11),
+            ),
+          ],
         ],
       ),
     );
@@ -227,16 +322,23 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
                 borderRadius: BorderRadius.circular(27),
               ),
               elevation: 0,
-              textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              textStyle: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             child: _isSaving
                 ? const SizedBox(
                     width: 22,
                     height: 22,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2.5, color: Colors.white),
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
                   )
-                : Text('Guardar $_selectedCount producto${_selectedCount == 1 ? '' : 's'} en despensa'),
+                : Text(
+                    'Guardar $_selectedCount producto${_selectedCount == 1 ? '' : 's'} en despensa',
+                  ),
           ),
         ),
       ),
@@ -267,12 +369,14 @@ class _ScannedItemsReviewScreenState extends State<ScannedItemsReviewScreen> {
 
 class _ProductCard extends StatelessWidget {
   final ScannedProduct product;
+  final String Function(DateTime) formatDate;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _ProductCard({
     required this.product,
+    required this.formatDate,
     required this.onToggle,
     required this.onEdit,
     required this.onDelete,
@@ -346,6 +450,21 @@ class _ProductCard extends StatelessWidget {
                           color: AppColors.textSecondary,
                         ),
                       ),
+                      if (product.expiryDate != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          product.expiryDateFromOcr
+                              ? 'Vence: ${formatDate(product.expiryDate!)}'
+                              : 'Vence: ${formatDate(product.expiryDate!)} (estimada)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: product.expiryDateFromOcr
+                                ? AppColors.primary
+                                : Colors.orange.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -361,7 +480,11 @@ class _ProductCard extends StatelessWidget {
                 const SizedBox(width: 4),
                 GestureDetector(
                   onTap: onDelete,
-                  child: const Icon(Icons.close, size: 18, color: AppColors.textLight),
+                  child: const Icon(
+                    Icons.close,
+                    size: 18,
+                    color: AppColors.textLight,
+                  ),
                 ),
               ],
             ),
@@ -388,6 +511,8 @@ class _EditProductSheetState extends State<_EditProductSheet> {
   late TextEditingController _priceCtrl;
   late ItemCategory _category;
   late String _unit;
+  late DateTime? _expiryDate;
+  late bool _originalFromOcr;
 
   final _units = ['unidades', 'kg', 'gramos', 'litros', 'ml', 'paquetes'];
 
@@ -396,14 +521,18 @@ class _EditProductSheetState extends State<_EditProductSheet> {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.product.name);
     _qtyCtrl = TextEditingController(
-        text: widget.product.quantity % 1 == 0
-            ? widget.product.quantity.toInt().toString()
-            : widget.product.quantity.toString());
+      text: widget.product.quantity % 1 == 0
+          ? widget.product.quantity.toInt().toString()
+          : widget.product.quantity.toString(),
+    );
     _priceCtrl = TextEditingController(
-        text: widget.product.price?.toStringAsFixed(0) ?? '');
+      text: widget.product.price?.toStringAsFixed(0) ?? '',
+    );
     _category = widget.product.category;
     _unit = widget.product.unit;
     if (!_units.contains(_unit)) _unit = 'unidades';
+    _expiryDate = widget.product.expiryDate;
+    _originalFromOcr = widget.product.expiryDateFromOcr;
   }
 
   @override
@@ -414,15 +543,41 @@ class _EditProductSheetState extends State<_EditProductSheet> {
     super.dispose();
   }
 
+  Future<void> _pickExpiryDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate ?? now.add(const Duration(days: 7)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365 * 2)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(
+              context,
+            ).colorScheme.copyWith(primary: AppColors.primary),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _expiryDate = picked);
+    }
+  }
+
   void _save() {
-    widget.onSave(ScannedProduct(
+    final edited = ScannedProduct(
       name: _nameCtrl.text.trim(),
       quantity: double.tryParse(_qtyCtrl.text) ?? 1,
       unit: _unit,
       price: double.tryParse(_priceCtrl.text),
       category: _category,
       selected: widget.product.selected,
-    ));
+      expiryDate: _expiryDate,
+      expiryDateFromOcr: _originalFromOcr,
+    );
+    widget.onSave(edited);
     Navigator.pop(context);
   }
 
@@ -497,8 +652,12 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                   initialValue: _category,
                   decoration: const InputDecoration(labelText: 'Categoría'),
                   items: ItemCategory.values
-                      .map((c) => DropdownMenuItem(
-                          value: c, child: Text('${c.emoji} ${c.label}')))
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: c,
+                          child: Text('${c.emoji} ${c.label}'),
+                        ),
+                      )
                       .toList(),
                   onChanged: (v) {
                     if (v != null) setState(() => _category = v);
@@ -506,6 +665,30 @@ class _EditProductSheetState extends State<_EditProductSheet> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: _pickExpiryDate,
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Fecha de vencimiento',
+                suffixIcon: Icon(
+                  Icons.calendar_today_outlined,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              child: Text(
+                _expiryDate != null
+                    ? '${DateFormat('d MMM yyyy', 'es').format(_expiryDate!)}${_originalFromOcr ? '' : ' (estimada)'}'
+                    : 'No detectada — toca para asignar',
+                style: TextStyle(
+                  color: _expiryDate != null
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 24),
           SizedBox(

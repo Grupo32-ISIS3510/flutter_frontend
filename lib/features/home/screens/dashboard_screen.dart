@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -7,9 +9,13 @@ import 'package:second_serving_frontend/features/inventory/models/inventory_item
 import 'package:second_serving_frontend/shared/models/enums.dart';
 import 'package:second_serving_frontend/features/recipes/models/recipe.dart';
 import 'package:second_serving_frontend/features/analytics/providers/analytics_provider.dart';
+import 'package:second_serving_frontend/features/analytics/screens/savings_detail_screen.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/auth/providers/auth_provider.dart';
 import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
+import 'package:second_serving_frontend/features/shopping_list/providers/shopping_list_provider.dart';
+import 'package:second_serving_frontend/features/shopping_list/screens/shopping_list_screen.dart';
+import 'package:second_serving_frontend/features/analytics/services/feature_usage_telemetry_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -28,7 +34,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<AnalyticsProvider>().loadDashboard();
+      context
+          .read<FeatureUsageTelemetryService>()
+          .recordFeatureUse(FeatureIds.analytics);
+      final analytics = context.read<AnalyticsProvider>();
+      analytics.loadDashboard();
+      analytics.loadMonthlySavings();
       context
           .read<InventoryProvider>()
           .loadExpiringItems(days: _expiringDaysWindow);
@@ -53,9 +64,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final analyticsP = context.read<AnalyticsProvider>();
             final inventoryP = context.read<InventoryProvider>();
             final recipeP = context.read<RecipeProvider>();
-            await analyticsP.loadDashboard();
-            await inventoryP.loadExpiringItems(days: _expiringDaysWindow);
-            await recipeP.loadSuggestions(limit: 3);
+            await Future.wait([
+              analyticsP.loadDashboard(),
+              analyticsP.loadMonthlySavings(),
+              inventoryP.loadExpiringItems(days: _expiringDaysWindow),
+              recipeP.loadSuggestions(limit: 3),
+            ]);
           },
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -63,6 +77,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _buildHeader(context, userName, now),
               const SizedBox(height: 20),
               _buildStatsCard(analytics),
+              const SizedBox(height: 16),
+              const _ShoppingListShortcut(),
               const SizedBox(height: 24),
               _buildEatFirstSection(inventory.expiringItems, inventory.error),
               const SizedBox(height: 24),
@@ -104,19 +120,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildStatsCard(AnalyticsProvider analytics) {
     final saved = analytics.savings?.savedCop ?? 0;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    // Micro-optimización (PPoF #4 — overdraw):
+    // Material con elevation usa shadows nativos del compositor (baratos)
+    // en lugar de boxShadow con blur (saveLayer + blur en GPU, costoso).
+    return Material(
+      color: Colors.white,
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SavingsDetailScreen()),
+          );
+        },
+        child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
       child: Row(
         children: [
           Expanded(
@@ -175,6 +195,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }
@@ -332,9 +354,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         else
           SizedBox(
             height: 150,
+            // Capamos el carrusel a 10 cards para evitar materializar todas
+            // las cards en memoria con inventarios grandes.
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: filtered.length,
+              itemCount: math.min(filtered.length, 10),
               separatorBuilder: (_, _) => const SizedBox(width: 12),
               itemBuilder: (context, i) =>
                   _ExpiringItemCard(item: filtered[i]),
@@ -403,19 +427,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(height: 16),
         if (recipe != null)
-          Container(
+          // Micro-optimización (PPoF #4 — overdraw):
+          // Material + elevation reemplaza el Container con boxShadow blur
+          // para evitar un saveLayer adicional en el GPU.
+          Material(
+            color: Colors.white,
+            elevation: 2,
+            shadowColor: Colors.black.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 12,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
             child: Row(
               children: [
                 Container(
@@ -470,18 +491,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ],
             ),
+            ),
           )
         else
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Center(
-              child: Text(
-                'No hay plan para hoy',
-                style: TextStyle(color: AppColors.textSecondary),
+          // Micro-optimización (PPoF #4 — overdraw):
+          // Material reemplaza el Container con BoxDecoration redundante.
+          Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            child: const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(
+                child: Text(
+                  'No hay plan para hoy',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
               ),
             ),
           ),
@@ -510,73 +534,163 @@ class _ExpiringItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final expiryText = FormatHelpers.daysRemaining(item.daysRemaining);
 
-    return SizedBox(
-      width: 120,
-      child: Column(
-        children: [
-          Expanded(
-            child: Container(
-              width: 120,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
+    // Micro-optimización (PPoF #4 — overdraw):
+    // Aislar cada card en su propio RepaintBoundary evita que repintar
+    // un item del carrusel obligue al GPU a repintar los demás.
+    // Combinado con Material + elevation (en lugar de boxShadow con blur)
+    // reduce drásticamente el costo de paint en el frame.
+    return RepaintBoundary(
+      child: SizedBox(
+        width: 120,
+        child: Column(
+          children: [
+            Expanded(
+              child: Material(
                 color: Colors.white,
+                elevation: 2,
+                shadowColor: Colors.black.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    item.name,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _statusColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      expiryText,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: _statusColor,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                      const SizedBox(height: 8),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: _statusColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          child: Text(
+                            expiryText,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: _statusColor,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: LinearProgressIndicator(
-              value: _progressValue,
-              backgroundColor: Colors.grey.shade200,
-              valueColor: AlwaysStoppedAnimation<Color>(_statusColor),
-              minHeight: 4,
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: _progressValue,
+                backgroundColor: Colors.grey.shade200,
+                valueColor: AlwaysStoppedAnimation<Color>(_statusColor),
+                minHeight: 4,
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShoppingListShortcut extends StatelessWidget {
+  const _ShoppingListShortcut();
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = context.watch<ShoppingListProvider>().pendingCount;
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ShoppingListScreen()),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.shopping_basket_outlined,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Lista de compras',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      pending == 0
+                          ? 'Sin pendientes — toca para revisar'
+                          : '$pending pendiente${pending == 1 ? '' : 's'} por comprar',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (pending > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$pending',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.textSecondary),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

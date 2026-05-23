@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
+import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
+import 'package:second_serving_frontend/features/favorites/screens/favorites_screen.dart';
 import 'package:second_serving_frontend/features/recipes/config/recipe_images.dart';
 import 'package:second_serving_frontend/features/recipes/models/recipe.dart';
 import 'package:second_serving_frontend/features/recipes/providers/recipe_provider.dart';
 import 'package:second_serving_frontend/features/recipes/screens/recipe_detail_screen.dart';
-import 'package:second_serving_frontend/shared/services/mock_data.dart';
 
 class RecipesScreen extends StatefulWidget {
   const RecipesScreen({super.key});
@@ -38,6 +39,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
                 child: CustomScrollView(
                   slivers: [
                     _buildAppBar(context),
+                    _buildStrategySelector(provider),
                     _buildIngredientChips(),
                     if (provider.suggestions.isEmpty)
                       SliverFillRemaining(
@@ -59,7 +61,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
         child: Row(
           children: [
             GestureDetector(
-              onTap: () {},
+              onTap: () => Navigator.of(context).maybePop(),
               child: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
             ),
             const Expanded(
@@ -74,8 +76,93 @@ class _RecipesScreenState extends State<RecipesScreen> {
               ),
             ),
             GestureDetector(
-              onTap: () {},
-              child: const Icon(Icons.search, color: AppColors.textPrimary),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const FavoritesScreen(),
+                  ),
+                );
+              },
+              child: const Icon(
+                Icons.favorite_border,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStrategySelector(RecipeProvider provider) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ordenar por',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: provider.availableStrategies.map((strategy) {
+                final isActive = strategy.runtimeType == provider.activeStrategy.runtimeType;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => provider.setStrategy(strategy),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isActive ? AppColors.primary : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isActive
+                              ? AppColors.primary
+                              : AppColors.textLight.withValues(alpha: 0.4),
+                        ),
+                        boxShadow: isActive
+                            ? [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.25),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            strategy.icon,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            strategy.label,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isActive ? Colors.white : AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+                }).toList(),
+              ),
             ),
           ],
         ),
@@ -84,7 +171,12 @@ class _RecipesScreenState extends State<RecipesScreen> {
   }
 
   Widget _buildIngredientChips() {
-    final ingredients = MockData.expiringIngredientNames;
+    // Micro-optimización (PPoF #3): `select` escucha solo el getter memoizado
+    // en vez de `watch` sobre todo el provider, y el cómputo
+    // (map → toSet → take → toList) ya no se rehace en cada `build()`.
+    final ingredients = context.select<InventoryProvider, List<String>>(
+      (p) => p.topExpiringIngredientNames,
+    );
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -134,14 +226,20 @@ class _RecipesScreenState extends State<RecipesScreen> {
   }
 
   Widget _buildRecipeList(List<RecipeSummary> recipes) {
+    final inventoryNames = context
+        .watch<InventoryProvider>()
+        .items
+        .where((item) => item.isActive)
+        .map((item) => item.name.toLowerCase().trim())
+        .toSet();
+
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, i) => _RecipeCard(
             recipe: recipes[i],
-            matchedIngredients:
-                MockData.recipeMatchedIngredients[recipes[i].id] ?? [],
+            inventoryNames: inventoryNames,
           ),
           childCount: recipes.length,
         ),
@@ -181,11 +279,11 @@ class _RecipesScreenState extends State<RecipesScreen> {
 
 class _RecipeCard extends StatelessWidget {
   final RecipeSummary recipe;
-  final List<String> matchedIngredients;
+  final Set<String> inventoryNames;
 
   const _RecipeCard({
     required this.recipe,
-    required this.matchedIngredients,
+    required this.inventoryNames,
   });
 
   @override
@@ -284,14 +382,14 @@ class _RecipeCard extends StatelessWidget {
                     color: AppColors.textPrimary,
                   ),
                 ),
-                if (matchedIngredients.isNotEmpty) ...[
+                if (recipe.inventoryMatches > 0) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'INGREDIENTES: ${matchedIngredients.join(', ').toUpperCase()}',
+                    '${recipe.inventoryMatches} INGREDIENTE${recipe.inventoryMatches == 1 ? '' : 'S'} EN TU DESPENSA',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
+                      color: AppColors.primary,
                       letterSpacing: 0.3,
                     ),
                   ),

@@ -8,6 +8,10 @@ import 'package:second_serving_frontend/features/inventory/providers/add_item_pr
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
 import 'package:second_serving_frontend/features/inventory/screens/scanned_items_review_screen.dart';
 import 'package:second_serving_frontend/features/inventory/services/receipt_scanner_service.dart';
+import 'package:second_serving_frontend/core/network/api_client.dart';
+import 'package:second_serving_frontend/features/inventory/services/scan_telemetry_service.dart';
+import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
+import 'package:second_serving_frontend/features/analytics/services/feature_usage_telemetry_service.dart';
 import 'package:second_serving_frontend/features/notifications/application/local_notifications_service.dart';
 
 class AddItemScreen extends StatelessWidget {
@@ -30,19 +34,16 @@ class _AddItemView extends StatefulWidget {
 }
 
 class _AddItemViewState extends State<_AddItemView> {
-  static final RegExp _allowedNameChars =
-      RegExp(r"[a-zA-ZÀ-ÿ0-9'.,()/\-\s]");
+  static final RegExp _allowedNameChars = RegExp(r"[a-zA-ZÀ-ÿ0-9'.,()/\-\s]");
 
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _unitPriceController = TextEditingController();
   final _scannerService = ReceiptScannerService();
+  late final ScanTelemetryService _scanTelemetry;
+  late final ScreenAnalyticsService _screenAnalytics;
+  bool _exitRecorded = false;
   bool _isScanning = false;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
 
   DateTime _clampDate({
     required DateTime value,
@@ -86,29 +87,77 @@ class _AddItemViewState extends State<_AddItemView> {
     }
   }
 
+  bool _servicesInitialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_servicesInitialized) {
+      _servicesInitialized = true;
+      final apiClient = context.read<ApiClient>();
+      _scanTelemetry = ScanTelemetryService(apiClient: apiClient);
+      _screenAnalytics = ScreenAnalyticsService(apiClient: apiClient);
+      _screenAnalytics.recordEnter('add_item');
+    }
+  }
+
+  void _recordExitOnce(String reason) {
+    if (_exitRecorded) return;
+    _exitRecorded = true;
+    _screenAnalytics.recordExit('add_item', reason);
+  }
+
+  @override
+  void dispose() {
+    _recordExitOnce('back');
+    _nameController.dispose();
+    _unitPriceController.dispose();
+    super.dispose();
+  }
+
   Future<void> _handleCameraScan() async {
+    context
+        .read<FeatureUsageTelemetryService>()
+        .recordFeatureUse(FeatureIds.scanReceipt);
     setState(() => _isScanning = true);
+    final stopwatch = Stopwatch()..start();
 
     try {
       final result = await _scannerService.scan();
+      stopwatch.stop();
 
       if (!mounted) return;
       setState(() => _isScanning = false);
 
       if (!result.success) {
-        if (result.errorMessage == 'Captura cancelada') return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.errorMessage ?? 'Error al escanear'),
-            action: SnackBarAction(
-              label: 'Ingreso manual',
-              textColor: Colors.white,
-              onPressed: () {},
+        final isCancelled = result.errorMessage == 'Captura cancelada';
+        if (!isCancelled) {
+          _scanTelemetry.recordScan(
+            success: false,
+            failureReason: result.errorMessage ?? 'unknown',
+            durationMs: stopwatch.elapsedMilliseconds,
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.errorMessage ?? 'Error al escanear'),
+              action: SnackBarAction(
+                label: 'Ingreso manual',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
             ),
-          ),
-        );
+          );
+        }
         return;
       }
+
+      _scanTelemetry.recordScan(
+        success: true,
+        productsDetected: result.products.length,
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
+
+      _recordExitOnce('scan_started');
 
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -119,6 +168,13 @@ class _AddItemViewState extends State<_AddItemView> {
         ),
       );
     } catch (e) {
+      stopwatch.stop();
+      _scanTelemetry.recordScan(
+        success: false,
+        failureReason: 'exception: $e',
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
+
       if (!mounted) return;
       setState(() => _isScanning = false);
       ScaffoldMessenger.of(
@@ -216,14 +272,19 @@ class _AddItemViewState extends State<_AddItemView> {
 
     addProvider.setSaving(true);
 
-    final data = addProvider.buildPayload(sanitizedName);
-    final success = await inventoryProvider.addItem(data);
+    final rawPrice = _unitPriceController.text.trim().replaceAll(',', '.');
+    final double? unitPrice = rawPrice.isEmpty
+        ? null
+        : double.tryParse(rawPrice);
+
+    final data = addProvider.buildPayload(sanitizedName, unitPrice: unitPrice);
+    final result = await inventoryProvider.addItem(data);
 
     if (!mounted) return;
 
     addProvider.setSaving(false);
 
-    if (success) {
+    if (result != null) {
       final int daysRemaining = addProvider.daysRemainingFromToday();
 
       if (daysRemaining >= 0 && daysRemaining <= 1) {
@@ -234,6 +295,18 @@ class _AddItemViewState extends State<_AddItemView> {
         if (!mounted) return;
       }
 
+      if (result == 'queued' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Guardado localmente — se sincronizará cuando haya conexión',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
+      _recordExitOnce('completed_manual');
       Navigator.of(context).pop(true);
       return;
     }
@@ -247,40 +320,53 @@ class _AddItemViewState extends State<_AddItemView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: Form(
-                key: _formKey,
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: [
-                    const SizedBox(height: 16),
-                    _buildMethodButtons(),
-                    const SizedBox(height: 28),
-                    _buildField('Nombre', _buildNameInput()),
-                    const SizedBox(height: 20),
-                    _buildField('Categoría', _buildCategoryDropdown()),
-                    const SizedBox(height: 20),
-                    _buildQuantityAndUnits(),
-                    const SizedBox(height: 20),
-                    _buildField('Fecha compra', _buildPurchaseDatePicker()),
-                    const SizedBox(height: 20),
-                    _buildField('Fecha vencimiento', _buildExpiryDatePicker()),
-                    const SizedBox(height: 20),
-                    _buildLocationChips(),
-                    const SizedBox(height: 32),
-                    _buildSaveButton(),
-                    const SizedBox(height: 24),
-                  ],
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) _recordExitOnce('back');
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: Form(
+                  key: _formKey,
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    children: [
+                      const SizedBox(height: 16),
+                      _buildMethodButtons(),
+                      const SizedBox(height: 28),
+                      _buildField('Nombre', _buildNameInput()),
+                      const SizedBox(height: 20),
+                      _buildField('Categoría', _buildCategoryDropdown()),
+                      const SizedBox(height: 20),
+                      _buildQuantityAndUnits(),
+                      const SizedBox(height: 20),
+                      _buildField(
+                        'Costo unitario (opcional)',
+                        _buildUnitPriceInput(),
+                      ),
+                      const SizedBox(height: 20),
+                      _buildField('Fecha compra', _buildPurchaseDatePicker()),
+                      const SizedBox(height: 20),
+                      _buildField(
+                        'Fecha vencimiento',
+                        _buildExpiryDatePicker(),
+                      ),
+                      const SizedBox(height: 20),
+                      _buildLocationChips(),
+                      const SizedBox(height: 32),
+                      _buildSaveButton(),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -412,7 +498,7 @@ class _AddItemViewState extends State<_AddItemView> {
         keyboardType: TextInputType.text,
         textCapitalization: TextCapitalization.words,
         inputFormatters: [
-          LengthLimitingTextInputFormatter(25),
+          LengthLimitingTextInputFormatter(60),
           FilteringTextInputFormatter.allow(_allowedNameChars),
         ],
         onChanged: (value) {
@@ -426,6 +512,53 @@ class _AddItemViewState extends State<_AddItemView> {
         validator: addProvider.validateName,
         decoration: InputDecoration(
           hintText: 'Aguacate',
+          hintStyle: TextStyle(
+            color: AppColors.textSecondary.withValues(alpha: 0.6),
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUnitPriceInput() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: TextFormField(
+        controller: _unitPriceController,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          LengthLimitingTextInputFormatter(12),
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+        ],
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return null; // opcional
+          }
+          final parsed = double.tryParse(value.trim().replaceAll(',', '.'));
+          if (parsed == null) {
+            return 'Ingresa un número válido';
+          }
+          if (parsed < 0) {
+            return 'No puede ser negativo';
+          }
+          return null;
+        },
+        decoration: InputDecoration(
+          hintText: 'Ej: 2500',
+          prefixText: '\$ ',
           hintStyle: TextStyle(
             color: AppColors.textSecondary.withValues(alpha: 0.6),
           ),
@@ -554,8 +687,10 @@ class _AddItemViewState extends State<_AddItemView> {
 
   Widget _buildPurchaseDatePicker() {
     final addProvider = context.watch<AddItemProvider>();
-    final formatted =
-        DateFormat("d MMM yyyy", 'es').format(addProvider.purchaseDate);
+    final formatted = DateFormat(
+      "d MMM yyyy",
+      'es',
+    ).format(addProvider.purchaseDate);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _pickPurchaseDate,
@@ -590,8 +725,10 @@ class _AddItemViewState extends State<_AddItemView> {
 
   Widget _buildExpiryDatePicker() {
     final addProvider = context.watch<AddItemProvider>();
-    final formatted =
-        DateFormat("d MMM yyyy", 'es').format(addProvider.expiryDate);
+    final formatted = DateFormat(
+      "d MMM yyyy",
+      'es',
+    ).format(addProvider.expiryDate);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _pickExpiryDate,

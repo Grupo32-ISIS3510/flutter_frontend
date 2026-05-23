@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
+import 'package:second_serving_frontend/features/favorites/models/favorite_recipe.dart';
+import 'package:second_serving_frontend/features/favorites/providers/favorites_provider.dart';
 import 'package:second_serving_frontend/features/recipes/config/recipe_images.dart';
 import 'package:second_serving_frontend/features/recipes/models/recipe.dart';
 import 'package:second_serving_frontend/features/inventory/providers/inventory_provider.dart';
@@ -26,6 +28,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       final provider = context.read<RecipeProvider>();
       provider.loadRecipeDetail(widget.recipeId);
       provider.markAsViewed(widget.recipeId);
+      context.read<FavoritesProvider>().load();
     });
   }
 
@@ -58,15 +61,43 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     final recipeProvider = context.read<RecipeProvider>();
     final inventoryProvider = context.read<InventoryProvider>();
     final messenger = ScaffoldMessenger.of(context);
+
     await recipeProvider.markAsCooked(widget.recipeId);
 
+    // Cargar inventario completo para asegurar que tengamos todos los items
+    await inventoryProvider.loadItems(limit: 100);
+
+    if (!mounted) return;
+
+    // Cruzar ingredientes de la receta con items activos del inventario por nombre
+    final ingredientNames = recipe.ingredients
+        .map((i) => i.ingredientName.toLowerCase().trim())
+        .toSet();
+
+    final matchingItems = inventoryProvider.items
+        .where((item) =>
+            item.isActive &&
+            ingredientNames.any((name) =>
+                item.name.toLowerCase().trim().contains(name) ||
+                name.contains(item.name.toLowerCase().trim())))
+        .toList();
+
+    for (final item in matchingItems) {
+      await inventoryProvider.consumeItem(item.id);
+    }
+
     if (mounted) {
-      await inventoryProvider.loadItems();
       setState(() => _isCooking = false);
+      final consumed = matchingItems.length;
       messenger.showSnackBar(
         SnackBar(
-          content: Text('¡${recipe.name} cocinada!'),
-          backgroundColor: AppColors.success,
+          content: Text(
+            consumed > 0
+                ? '¡${recipe.name} cocinada! $consumed ingrediente${consumed == 1 ? '' : 's'} consumido${consumed == 1 ? '' : 's'}.'
+                : '¡${recipe.name} cocinada! No se encontraron ingredientes en tu despensa.',
+          ),
+          backgroundColor: consumed > 0 ? AppColors.success : AppColors.warning,
+          duration: const Duration(seconds: 4),
         ),
       );
     }
@@ -125,11 +156,49 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           child: const Icon(Icons.arrow_back, color: Colors.white),
         ),
       ),
+      actions: [_buildFavoriteToggle(recipe)],
       flexibleSpace: FlexibleSpaceBar(
         background: RecipeImages.buildImage(
           recipeName: recipe.name,
           category: recipe.category.value,
           height: 220,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFavoriteToggle(RecipeDetail recipe) {
+    final favorites = context.watch<FavoritesProvider>();
+    final isFav = favorites.isFavorite(recipe.id);
+
+    return GestureDetector(
+      onTap: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        final nowFav = await context
+            .read<FavoritesProvider>()
+            .toggle(FavoriteRecipe.fromDetail(recipe));
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              nowFav
+                  ? '${recipe.name} guardada en favoritas'
+                  : '${recipe.name} eliminada de favoritas',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.3),
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          isFav ? Icons.favorite : Icons.favorite_border,
+          color: isFav ? AppColors.secondary : Colors.white,
         ),
       ),
     );
