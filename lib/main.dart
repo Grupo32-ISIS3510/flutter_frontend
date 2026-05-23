@@ -14,6 +14,8 @@ import 'package:second_serving_frontend/core/connectivity/connectivity_service.d
 import 'package:second_serving_frontend/core/router/router.dart';
 import 'package:second_serving_frontend/core/widgets/offline_banner.dart';
 import 'package:second_serving_frontend/features/analytics/providers/analytics_provider.dart';
+import 'package:second_serving_frontend/features/analytics/providers/savings_detail_provider.dart';
+import 'package:second_serving_frontend/features/analytics/data/waste_cache.dart';
 import 'package:second_serving_frontend/features/auth/providers/auth_provider.dart';
 import 'package:second_serving_frontend/features/favorites/data/favorites_local_db.dart';
 import 'package:second_serving_frontend/features/favorites/providers/favorites_provider.dart';
@@ -47,14 +49,14 @@ final ConnectivityService _connectivityService = ConnectivityService();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
+  await Future.wait([
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]),
+    initializeDateFormatting('es', null),
+    LocalNotificationsService.instance.initialize(),
+    _connectivityService.initialize(),
+    InventoryLocalDb.instance.initialize(),
+    FavoritesLocalDb.instance.initialize(),
   ]);
-  await initializeDateFormatting('es', null);
-  await LocalNotificationsService.instance.initialize();
-  await _connectivityService.initialize();
-  await InventoryLocalDb.instance.initialize();
-  await FavoritesLocalDb.instance.initialize();
 
   _pushNotificationsService = PushNotificationsService(
     notificationsApiService: NotificationsApiService(
@@ -99,6 +101,8 @@ class _SecondServingAppState extends State<SecondServingApp> {
   late final RecipeProvider _recipeProvider;
   late final FavoritesProvider _favoritesProvider;
   late final AnalyticsProvider _analyticsProvider;
+  late final SavingsDetailProvider _savingsDetailProvider;
+  late final WasteCache _wasteCache;
   late final ShoppingListProvider _shoppingListProvider;
   late final ConnectivityProvider _connectivityProvider;
   late final RecipeService _recipeService;
@@ -138,10 +142,17 @@ class _SecondServingAppState extends State<SecondServingApp> {
       onLogout: () async {
         await InventoryLocalDb.instance.clear();
         await FavoritesLocalDb.instance.clear();
+        await _wasteCache.clear();
         _favoritesProvider.reset();
       },
     );
     _analyticsProvider = AnalyticsProvider(analyticsService);
+    _wasteCache = WasteCache();
+    _savingsDetailProvider = SavingsDetailProvider(
+      analyticsService,
+      _wasteCache,
+      connectivityService: _connectivityService,
+    );
     _inventoryProvider = InventoryProvider(
       inventoryService,
       onInventoryMutated: () => _analyticsProvider.loadMonthlySavings(),
@@ -190,6 +201,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
     _favoritesProvider.dispose();
     _shoppingListProvider.dispose();
     _analyticsProvider.dispose();
+    _savingsDetailProvider.dispose();
     _authProvider.dispose();
     _apiClient.dispose();
     unawaited(_connectivityService.dispose());
@@ -209,6 +221,7 @@ class _SecondServingAppState extends State<SecondServingApp> {
         ChangeNotifierProvider.value(value: _recipeProvider),
         ChangeNotifierProvider.value(value: _favoritesProvider),
         ChangeNotifierProvider.value(value: _analyticsProvider),
+        ChangeNotifierProvider.value(value: _savingsDetailProvider),
         ChangeNotifierProvider.value(value: _shoppingListProvider),
         ChangeNotifierProvider.value(value: _connectivityProvider),
       ],

@@ -72,6 +72,7 @@ class ShoppingListProvider extends ChangeNotifier {
       payload: item.toJson(),
     );
     _items = [item, ..._items];
+    _suggestions.invalidateCache();
     notifyListeners();
   }
 
@@ -96,6 +97,7 @@ class ShoppingListProvider extends ChangeNotifier {
     _currentSuggestions = _currentSuggestions
         .where((s) => s.name != suggestion.name)
         .toList();
+    _suggestions.invalidateCache();
     notifyListeners();
   }
 
@@ -110,6 +112,7 @@ class ShoppingListProvider extends ChangeNotifier {
       payload: {'purchased': updated.purchased},
     );
     _items[idx] = updated;
+    _suggestions.invalidateCache();
     notifyListeners();
   }
 
@@ -121,6 +124,7 @@ class ShoppingListProvider extends ChangeNotifier {
       payload: {},
     );
     _items = _items.where((i) => i.id != id).toList();
+    _suggestions.invalidateCache();
     notifyListeners();
   }
 
@@ -135,6 +139,7 @@ class ShoppingListProvider extends ChangeNotifier {
       );
     }
     _items = _items.where((i) => !i.purchased).toList();
+    _suggestions.invalidateCache();
     notifyListeners();
   }
 
