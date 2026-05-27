@@ -39,6 +39,17 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+
+            // R8 / ProGuard: shrink + obfuscate. Keep rules live in
+            // proguard-rules.pro (next to this file). Resource shrinking is
+            // left off intentionally — turning it on requires extra `-keep`
+            // rules for runtime resource lookups in Flutter plugins.
+            isMinifyEnabled = true
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
