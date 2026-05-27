@@ -7,6 +7,13 @@ abstract class RecipeService {
   Future<RecipeListResponse> getRecipes({int skip = 0, int limit = 20});
   Future<RecipeDetail> getRecipeDetail(String id);
   Future<void> interact(String id, String action);
+
+  /// BQ T3.6 — marca la receta como favorita en el backend.
+  /// Idempotente: el backend acepta múltiples llamadas con el mismo id.
+  Future<void> addFavorite(String id);
+
+  /// BQ T3.6 — desmarca la receta como favorita en el backend.
+  Future<void> removeFavorite(String id);
 }
 
 class RecipeServiceImpl implements RecipeService {
@@ -42,5 +49,15 @@ class RecipeServiceImpl implements RecipeService {
   @override
   Future<void> interact(String id, String action) async {
     await _client.post(ApiConfig.recipeInteract(id), body: {'action': action});
+  }
+
+  @override
+  Future<void> addFavorite(String id) async {
+    await _client.post(ApiConfig.recipeFavorite(id), body: {});
+  }
+
+  @override
+  Future<void> removeFavorite(String id) async {
+    await _client.delete(ApiConfig.recipeFavorite(id));
   }
 }

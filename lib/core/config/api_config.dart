@@ -36,6 +36,9 @@ class ApiConfig {
   static const String recipeSeed = '$apiPrefix/recipes/seed';
   static String recipeDetail(String id) => '$apiPrefix/recipes/$id';
   static String recipeInteract(String id) => '$apiPrefix/recipes/$id/interact';
+  // Favorites (BQ T3.6)
+  static String recipeFavorite(String id) => '$apiPrefix/recipes/$id/favorite';
+  static const String recipeFavorites = '$apiPrefix/recipes/favorites';
 
   // Notifications
   static const String notificationDevice = '$apiPrefix/notifications/device';
@@ -52,6 +55,8 @@ class ApiConfig {
       '$apiPrefix/analytics/recipe-impact';
   static const String analyticsBehaviorPatterns =
       '$apiPrefix/analytics/behavior-patterns';
+  // BQ T1.1 / T3.4 — generic analytics events (notification_received / _opened)
+  static const String analyticsEvents = '$apiPrefix/analytics/events';
 
   // Telemetry
   static const String telemetryScanEvent = '$apiPrefix/telemetry/scan-events';

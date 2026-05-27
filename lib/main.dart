@@ -42,6 +42,7 @@ import 'package:second_serving_frontend/features/inventory/services/scan_telemet
 import 'package:second_serving_frontend/features/inventory/services/expiry_telemetry_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/screen_analytics_service.dart';
 import 'package:second_serving_frontend/features/analytics/services/feature_usage_telemetry_service.dart';
+import 'package:second_serving_frontend/features/analytics/services/analytics_events_service.dart';
 
 const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 late final PushNotificationsService _pushNotificationsService;
@@ -112,10 +113,14 @@ class _SecondServingAppState extends State<SecondServingApp> {
   StreamSubscription<String>? _pushTapSubscription;
   StreamSubscription<String>? _localTapSubscription;
 
+  late final AnalyticsEventsService _analyticsEvents;
+
   @override
   void initState() {
     super.initState();
     _apiClient = ApiClient();
+    _analyticsEvents = AnalyticsEventsService(apiClient: _apiClient);
+    _pushNotificationsService.attachAnalyticsEvents(_analyticsEvents);
 
     final AuthService authService = (ApiConfig.useMock || ApiConfig.useMockAuth)
         ? MockAuthService()
@@ -158,7 +163,10 @@ class _SecondServingAppState extends State<SecondServingApp> {
       onInventoryMutated: () => _analyticsProvider.loadMonthlySavings(),
     );
     _recipeProvider = RecipeProvider(_recipeService);
-    _favoritesProvider = FavoritesProvider(connectivity: _connectivityService);
+    _favoritesProvider = FavoritesProvider(
+      connectivity: _connectivityService,
+      recipeService: _recipeService,
+    );
     _shoppingListProvider = ShoppingListProvider();
     _featureUsageTelemetry = FeatureUsageTelemetryService(apiClient: _apiClient);
     _connectivityProvider = ConnectivityProvider(

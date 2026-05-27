@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:second_serving_frontend/core/connectivity/connectivity_service.dart';
 import 'package:second_serving_frontend/features/favorites/data/favorites_local_db.dart';
 import 'package:second_serving_frontend/features/favorites/models/favorite_recipe.dart';
+import 'package:second_serving_frontend/features/recipes/services/recipe_service.dart';
 import 'package:second_serving_frontend/shared/models/enums.dart';
 
 /// ViewModel del feature de Recetas Favoritas (patrón MVVM).
@@ -29,11 +30,16 @@ import 'package:second_serving_frontend/shared/models/enums.dart';
 class FavoritesProvider extends ChangeNotifier {
   final FavoritesLocalDb _db;
   final ConnectivityService? _connectivity;
+  final RecipeService? _recipeService;
   StreamSubscription<bool>? _connectivitySub;
 
-  FavoritesProvider({FavoritesLocalDb? db, ConnectivityService? connectivity})
-      : _db = db ?? FavoritesLocalDb.instance,
-        _connectivity = connectivity {
+  FavoritesProvider({
+    FavoritesLocalDb? db,
+    ConnectivityService? connectivity,
+    RecipeService? recipeService,
+  })  : _db = db ?? FavoritesLocalDb.instance,
+        _connectivity = connectivity,
+        _recipeService = recipeService {
     if (_connectivity != null) {
       _isOnline = _connectivity.isOnline;
       _connectivitySub = _connectivity.onStatusChange.listen(_onConnectivityChanged);
@@ -99,6 +105,11 @@ class FavoritesProvider extends ChangeNotifier {
 
   /// Alterna el estado de favorito de una receta y persiste en disco.
   /// Devuelve el nuevo estado (true = quedó como favorita).
+  ///
+  /// Tras la escritura local (fuente de verdad), notifica al backend en
+  /// **best-effort** para alimentar la BQ T3.6. El backend es idempotente,
+  /// así que un fallo de red no rompe la UI y queda como pérdida tolerable
+  /// hasta que se implemente una cola dedicada para favoritos.
   Future<bool> toggle(FavoriteRecipe recipe) async {
     final wasFavorite = _favoriteIds.contains(recipe.id);
     if (wasFavorite) {
@@ -107,6 +118,7 @@ class FavoritesProvider extends ChangeNotifier {
       await _db.add(recipe);
     }
     await load();
+    unawaited(_notifyBackend(recipe.id, addFavorite: !wasFavorite));
     return !wasFavorite;
   }
 
@@ -114,6 +126,23 @@ class FavoritesProvider extends ChangeNotifier {
   Future<void> remove(String id) async {
     await _db.remove(id);
     await load();
+    unawaited(_notifyBackend(id, addFavorite: false));
+  }
+
+  /// Notifica al backend el cambio de favorito (best-effort).
+  /// Cualquier excepción se atrapa silenciosamente para no romper la UI.
+  Future<void> _notifyBackend(String recipeId, {required bool addFavorite}) async {
+    final service = _recipeService;
+    if (service == null) return;
+    try {
+      if (addFavorite) {
+        await service.addFavorite(recipeId);
+      } else {
+        await service.removeFavorite(recipeId);
+      }
+    } catch (e) {
+      debugPrint('[FavoritesProvider] backend sync failed (best-effort): $e');
+    }
   }
 
   /// Limpia el estado en memoria (p. ej. tras logout, después de borrar la DB).

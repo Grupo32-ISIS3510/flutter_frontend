@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:second_serving_frontend/firebase_options.dart';
 
 import 'local_notifications_service.dart';
+import 'package:second_serving_frontend/features/analytics/services/analytics_events_service.dart';
 
 import '../data/services/notifications_api_service.dart';
 import '../data/services/push_sync_cache_service.dart';
@@ -25,18 +26,28 @@ class PushNotificationsService {
     PushSyncCacheService? syncCacheService,
     FirebaseMessaging? firebaseMessaging,
     LocalNotificationsService? localNotificationsService,
+    AnalyticsEventsService? analyticsEventsService,
   }) : _notificationsApiService = notificationsApiService,
        _accessTokenProvider = accessTokenProvider,
        _syncCacheService = syncCacheService ?? PushSyncCacheService(),
        _firebaseMessagingOverride = firebaseMessaging,
        _localNotificationsService =
-           localNotificationsService ?? LocalNotificationsService.instance;
+           localNotificationsService ?? LocalNotificationsService.instance,
+       _analyticsEvents = analyticsEventsService;
 
   final NotificationsApiService _notificationsApiService;
   final Future<String?> Function() _accessTokenProvider;
   final PushSyncCacheService _syncCacheService;
   final FirebaseMessaging? _firebaseMessagingOverride;
   final LocalNotificationsService _localNotificationsService;
+  AnalyticsEventsService? _analyticsEvents;
+
+  /// Permite inyectar el servicio después de la construcción (necesario porque
+  /// el `PushNotificationsService` se crea en `main()` antes de que exista
+  /// el `ApiClient` del State).
+  void attachAnalyticsEvents(AnalyticsEventsService service) {
+    _analyticsEvents = service;
+  }
   final StreamController<String> _notificationTapController =
       StreamController<String>.broadcast();
   final StreamController<PushSyncState> _syncStatusController =
@@ -97,6 +108,9 @@ class PushNotificationsService {
           payload: route,
         );
 
+        // BQ T1.1 / T3.4 — registrar recepción si el push trae item_id.
+        _trackNotificationEvent(message, opened: false);
+
         // Recibir un push confirma que hay red: aprovechamos para drenar
         // cualquier registro que haya quedado encolado por falta de conexión.
         unawaited(retryPendingSync());
@@ -104,12 +118,14 @@ class PushNotificationsService {
 
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
         _emitTapRoute(_extractRoute(message));
+        _trackNotificationEvent(message, opened: true);
       });
 
       final RemoteMessage? initialMessage = await _firebaseMessaging
           .getInitialMessage();
       if (initialMessage != null) {
         _emitTapRoute(_extractRoute(initialMessage));
+        _trackNotificationEvent(initialMessage, opened: true);
       }
     } catch (_) {}
   }
@@ -243,6 +259,22 @@ class PushNotificationsService {
       return route;
     }
     return '/home';
+  }
+
+  /// BQ T1.1 / T3.4 — empuja `notification_received` (al recibir) o
+  /// `notification_opened` (al tappear) si el push trae `item_id` en `data`.
+  /// Sin item_id no se trackea (el backend exige el UUID exacto).
+  void _trackNotificationEvent(RemoteMessage message, {required bool opened}) {
+    final service = _analyticsEvents;
+    if (service == null) return;
+    final dynamic raw = message.data['item_id'];
+    final String? itemId = raw is String && raw.isNotEmpty ? raw : null;
+    if (itemId == null) return;
+    if (opened) {
+      unawaited(service.trackNotificationOpened(itemId));
+    } else {
+      unawaited(service.trackNotificationReceived(itemId));
+    }
   }
 
   String _buildBodyFromMessageData(Map<String, dynamic> data) {

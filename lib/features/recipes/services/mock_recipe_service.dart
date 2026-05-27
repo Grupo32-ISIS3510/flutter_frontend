@@ -26,4 +26,14 @@ class MockRecipeService implements RecipeService {
   Future<void> interact(String id, String action) async {
     await Future.delayed(const Duration(milliseconds: 300));
   }
+
+  @override
+  Future<void> addFavorite(String id) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+  }
+
+  @override
+  Future<void> removeFavorite(String id) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+  }
 }

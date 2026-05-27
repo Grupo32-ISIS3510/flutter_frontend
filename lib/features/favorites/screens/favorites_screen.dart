@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
+import 'package:second_serving_frontend/features/analytics/services/feature_usage_telemetry_service.dart';
 import 'package:second_serving_frontend/features/favorites/models/favorite_recipe.dart';
 import 'package:second_serving_frontend/features/favorites/providers/favorites_provider.dart';
 import 'package:second_serving_frontend/features/recipes/config/recipe_images.dart';
@@ -26,6 +27,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<FavoritesProvider>().load();
+      // BQ T4.1 — registrar el uso de la feature Favoritos.
+      context
+          .read<FeatureUsageTelemetryService>()
+          .recordFeatureUse(FeatureIds.favorites);
     });
   }
 
