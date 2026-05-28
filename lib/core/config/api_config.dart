@@ -1,5 +1,6 @@
 class ApiConfig {
-  static const bool useMock = false; // Cambiar a false para usar el backend real
+  static const bool useMock =
+      false; // Cambiar a false para usar el backend real
 
   // Controles por módulo: true = forzar mock aunque useMock sea false
   // Cuando el backend esté listo con auth, cambiar useMock a false
@@ -52,9 +53,11 @@ class ApiConfig {
   static const String analyticsSegment = '$apiPrefix/analytics/segment';
   static const String analyticsDashboard = '$apiPrefix/analytics/dashboard';
   static const String analyticsRecipeImpact =
-      '$apiPrefix/analytics/recipe-impact';
+      '$apiPrefix/analytics/waste-reduction-by-recipe-category';
   static const String analyticsBehaviorPatterns =
-      '$apiPrefix/analytics/behavior-patterns';
+      '$apiPrefix/analytics/segments/patterns';
+  static const String analyticsFavoritesDistribution =
+      '$apiPrefix/analytics/favorites-distribution';
   // BQ T1.1 / T3.4 — generic analytics events (notification_received / _opened)
   static const String analyticsEvents = '$apiPrefix/analytics/events';
 

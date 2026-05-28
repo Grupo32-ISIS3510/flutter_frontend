@@ -22,6 +22,8 @@ import 'package:second_serving_frontend/shared/models/enums.dart';
 ///   - La feature NO depende de la red: agregar/quitar favoritos y la BQ de
 ///     distribución funcionan 100% offline porque la fuente de verdad es local.
 ///     Por eso no hay riesgo de pérdida de datos ni de UI bloqueada sin conexión.
+///   - Cuando hay backend disponible, la distribución se refresca desde
+///     `/analytics/favorites-distribution` para responder la BQ con datos reales.
 ///   - El ViewModel escucha [ConnectivityService.onStatusChange] y expone
 ///     [isOnline] para que la vista informe el estado.
 ///   - Al reconectar (offline → online) refresca el estado desde el almacén
@@ -37,12 +39,14 @@ class FavoritesProvider extends ChangeNotifier {
     FavoritesLocalDb? db,
     ConnectivityService? connectivity,
     RecipeService? recipeService,
-  })  : _db = db ?? FavoritesLocalDb.instance,
-        _connectivity = connectivity,
-        _recipeService = recipeService {
+  }) : _db = db ?? FavoritesLocalDb.instance,
+       _connectivity = connectivity,
+       _recipeService = recipeService {
     if (_connectivity != null) {
       _isOnline = _connectivity.isOnline;
-      _connectivitySub = _connectivity.onStatusChange.listen(_onConnectivityChanged);
+      _connectivitySub = _connectivity.onStatusChange.listen(
+        _onConnectivityChanged,
+      );
     }
   }
 
@@ -95,7 +99,10 @@ class FavoritesProvider extends ChangeNotifier {
     try {
       _favorites = await _db.getAll();
       _favoriteIds = _favorites.map((f) => f.id).toSet();
-      _categoryDistribution = await _db.categoryDistribution();
+      final localDistribution = await _db.categoryDistribution();
+      _categoryDistribution = await _loadBackendDistribution(
+        fallback: localDistribution,
+      );
     } catch (e) {
       debugPrint('[FavoritesProvider] load failed: $e');
     }
@@ -131,7 +138,10 @@ class FavoritesProvider extends ChangeNotifier {
 
   /// Notifica al backend el cambio de favorito (best-effort).
   /// Cualquier excepción se atrapa silenciosamente para no romper la UI.
-  Future<void> _notifyBackend(String recipeId, {required bool addFavorite}) async {
+  Future<void> _notifyBackend(
+    String recipeId, {
+    required bool addFavorite,
+  }) async {
     final service = _recipeService;
     if (service == null) return;
     try {
@@ -142,6 +152,20 @@ class FavoritesProvider extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('[FavoritesProvider] backend sync failed (best-effort): $e');
+    }
+  }
+
+  Future<Map<String, int>> _loadBackendDistribution({
+    required Map<String, int> fallback,
+  }) async {
+    final service = _recipeService;
+    if (service == null) return fallback;
+    try {
+      final remoteDistribution = await service.getFavoritesDistribution();
+      return remoteDistribution.isEmpty ? fallback : remoteDistribution;
+    } catch (e) {
+      debugPrint('[FavoritesProvider] favorites distribution failed: $e');
+      return fallback;
     }
   }
 
