@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:second_serving_frontend/core/config/app_theme.dart';
+import 'package:second_serving_frontend/features/analytics/services/feature_usage_telemetry_service.dart';
 import 'package:second_serving_frontend/shared/models/notification_preferences.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -33,6 +35,13 @@ class _NotificationSettingsScreenState
   void initState() {
     super.initState();
     _load();
+    // BQ T4.1 — registrar el uso de la pantalla de notificaciones.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context
+          .read<FeatureUsageTelemetryService>()
+          .recordFeatureUse(FeatureIds.notifications);
+    });
   }
 
   Future<void> _load() async {

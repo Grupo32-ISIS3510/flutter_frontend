@@ -14,6 +14,7 @@ class FeatureIds {
   static const String shoppingList = 'shopping_list';
   static const String analytics = 'analytics';
   static const String notifications = 'notifications';
+  static const String favorites = 'favorites';
 
   static const Set<String> all = {
     inventory,
@@ -22,6 +23,7 @@ class FeatureIds {
     shoppingList,
     analytics,
     notifications,
+    favorites,
   };
 }
 

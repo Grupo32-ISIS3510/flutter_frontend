@@ -13,7 +13,10 @@ class MockRecipeService implements RecipeService {
   Future<RecipeListResponse> getRecipes({int skip = 0, int limit = 20}) async {
     await Future.delayed(const Duration(milliseconds: 500));
     final page = MockData.recipeSummaries.skip(skip).take(limit).toList();
-    return RecipeListResponse(items: page, total: MockData.recipeSummaries.length);
+    return RecipeListResponse(
+      items: page,
+      total: MockData.recipeSummaries.length,
+    );
   }
 
   @override
@@ -25,5 +28,21 @@ class MockRecipeService implements RecipeService {
   @override
   Future<void> interact(String id, String action) async {
     await Future.delayed(const Duration(milliseconds: 300));
+  }
+
+  @override
+  Future<void> addFavorite(String id) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+  }
+
+  @override
+  Future<void> removeFavorite(String id) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+  }
+
+  @override
+  Future<Map<String, int>> getFavoritesDistribution() async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    return const {};
   }
 }
