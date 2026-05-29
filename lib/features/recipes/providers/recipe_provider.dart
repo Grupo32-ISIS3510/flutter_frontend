@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:second_serving_frontend/core/cache/lru_cache.dart';
 import 'package:second_serving_frontend/features/recipes/models/recipe.dart';
 import 'package:second_serving_frontend/features/recipes/services/recipe_service.dart';
 import 'package:second_serving_frontend/features/recipes/services/local_recipe_cache_service.dart';
@@ -17,6 +18,12 @@ import 'package:second_serving_frontend/features/recipes/strategies/recipe_sort_
 class RecipeProvider extends ChangeNotifier {
   final RecipeService _service;
   final LocalRecipeCacheService _cache = LocalRecipeCacheService();
+
+  /// L1 — caché LRU en memoria del detalle de receta (acceso O(1)).
+  /// Sirve la receta al instante al reabrirla y evita golpear disco/red.
+  /// Capacidad 20: evicta la receta menos usada cuando se llena.
+  final LruCache<String, RecipeDetail> _detailMemoryCache =
+      LruCache<String, RecipeDetail>(maxSize: 20);
 
   List<RecipeSummary> _rawSuggestions = [];
   List<RecipeSummary> _suggestions = [];
@@ -138,11 +145,20 @@ class RecipeProvider extends ChangeNotifier {
     _selectedRecipe = null;
     notifyListeners();
 
+    // 0) L1 — caché LRU en memoria: respuesta inmediata sin tocar disco/red.
+    final RecipeDetail? memoryHit = _detailMemoryCache.get(id);
+    if (memoryHit != null) {
+      _selectedRecipe = memoryHit;
+      _isLoading = false;
+      notifyListeners();
+    }
+
     // 1) Leer del caché local
     try {
       final cached = await _cache.getCachedDetail(id);
       if (cached != null) {
         _selectedRecipe = cached;
+        _detailMemoryCache.put(id, cached);
         _isLoading = false;
         notifyListeners();
       }
@@ -153,6 +169,7 @@ class RecipeProvider extends ChangeNotifier {
     // 2) Intentar red → actualizar caché y UI
     try {
       _selectedRecipe = await _service.getRecipeDetail(id);
+      _detailMemoryCache.put(id, _selectedRecipe!);
       await _cache.cacheDetail(_selectedRecipe!);
     } catch (e) {
       if (_selectedRecipe == null) {
