@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:second_serving_frontend/features/inventory/data/inventory_local_db.dart';
 import 'package:second_serving_frontend/features/inventory/models/inventory_item.dart';
 import 'package:second_serving_frontend/features/inventory/services/cached_inventory_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/inventory_service.dart';
 import 'package:second_serving_frontend/features/inventory/services/local_inventory_service.dart';
+import 'package:second_serving_frontend/shared/models/enums.dart';
 
 /// ViewModel del inventario.
 ///
@@ -66,7 +68,12 @@ class InventoryProvider extends ChangeNotifier {
   /// vienen de la cache local (puede que estén desactualizados).
   bool get isStale => _isStale;
 
-  Future<void> loadItems({int skip = 0, int limit = 20}) async {
+  // Carga una página amplia para que el inventario completo sea visible: la
+  // pantalla no implementa scroll infinito, así que con `limit: 20` los items
+  // más allá del 20 (p. ej. uno recién agregado con vencimiento lejano) no se veían.
+  // `SliverList.builder` renderiza de forma perezosa, así que subir el límite no
+  // afecta memoria de UI; solo agranda el payload de red.
+  Future<void> loadItems({int skip = 0, int limit = 200}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -135,9 +142,56 @@ class InventoryProvider extends ChangeNotifier {
         operation: 'create',
         payload: data,
       );
+
+      // Inserción optimista: el alimento debe verse en el inventario aunque no
+      // haya red. Se construye con un id local temporal y se persiste en la
+      // cache de lectura (InventoryLocalDb) para que sobreviva a un reload
+      // offline y al reinicio de la app. Al reconectar, syncPendingOperations
+      // crea el item real y el siguiente loadItems online reemplaza la cache
+      // (el temporal se descarta).
+      final optimistic = _buildOptimisticItem(data);
+      if (optimistic != null) {
+        _items.insert(0, optimistic);
+        _total++;
+        try {
+          await InventoryLocalDb.instance.upsert(optimistic);
+        } catch (cacheErr) {
+          debugPrint(
+              '[InventoryProvider] optimistic cache upsert failed: $cacheErr');
+        }
+      }
+
       _isLoading = false;
       notifyListeners();
+      _fireMutationHook();
       return 'queued';
+    }
+  }
+
+  /// Construye un [InventoryItem] a partir del payload de creación para mostrarlo
+  /// de inmediato cuando el guardado se encola sin conexión. Devuelve null si el
+  /// payload está incompleto (en cuyo caso simplemente no se inserta).
+  InventoryItem? _buildOptimisticItem(Map<String, dynamic> data) {
+    try {
+      final now = DateTime.now();
+      return InventoryItem(
+        id: 'local_${now.millisecondsSinceEpoch}',
+        name: data['name'] as String,
+        category: ItemCategory.fromString(data['category'] as String? ?? 'other'),
+        quantity: double.parse(data['quantity'].toString()),
+        unit: data['unit'] as String?,
+        unitPrice: data['unit_price'] != null
+            ? double.parse(data['unit_price'].toString())
+            : null,
+        purchaseDate: DateTime.parse(data['purchase_date'] as String),
+        expiryDate: DateTime.parse(data['expiry_date'] as String),
+        status: ItemStatus.active,
+        notes: data['notes'] as String?,
+        createdAt: now,
+      );
+    } catch (e) {
+      debugPrint('[InventoryProvider] could not build optimistic item: $e');
+      return null;
     }
   }
 
